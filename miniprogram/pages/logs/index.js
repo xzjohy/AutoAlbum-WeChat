@@ -1,0 +1,1 @@
+const logger=require('../../utils/logger');Page({data:{logs:[]},onShow(){this.load()},load(){this.setData({logs:logger.list().slice().reverse()})},clear(){logger.clear();this.load()}});
