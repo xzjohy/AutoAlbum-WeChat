@@ -1,0 +1,1 @@
+module.exports={serviceUUID:'0000FFF0-0000-1000-8000-00805F9B34FB',writeUUID:'0000FFF1-0000-1000-8000-00805F9B34FB',notifyUUID:'0000FFF2-0000-1000-8000-00805F9B34FB',packetSize:180,writeType:'writeNoResponse',screen:{width:400,height:300,colorMode:'BWR'}};
