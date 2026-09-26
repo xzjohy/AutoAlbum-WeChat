@@ -1,0 +1,1 @@
+const logger=require('./utils/logger'); App({onLaunch(){logger.info('APP','自动相册启动')}});
