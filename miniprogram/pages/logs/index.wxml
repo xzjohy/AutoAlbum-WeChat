@@ -1,0 +1,1 @@
+<view class="page"><view class="card"><view class="row"><view class="title">运行日志</view><button size="mini" bindtap="clear">清空</button></view></view><view class="card log" wx:for="{{logs}}" wx:key="time"><view><text class="level">{{item.level}}</text> <text>{{item.tag}}</text></view><view>{{item.message}}</view><view class="muted">{{item.time}}</view></view></view>
