@@ -21,4 +21,10 @@ async function resetScreen(){
   log.info('EPD','force reset requested');
   return protocol.emergencyReset();
 }
+async function setClock(face,intervalMinutes){
+  const m=Math.max(1,Math.min(1440,parseInt(intervalMinutes,10)||3));
+  const mode=face==='analog'||face===1?1:0;
+  await ble.write(Uint8Array.from([0xE3,mode,m&0xff,(m>>8)&0xff]).buffer);
+  log.info('CLOCK',`face=${mode?'analog':'digital'} interval=${m}min`);
+}
 module.exports={saveSlot,deleteSlot,setCarousel,resetScreen};
