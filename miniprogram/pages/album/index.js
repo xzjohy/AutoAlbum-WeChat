@@ -2,6 +2,7 @@ const ble=require('../../services/ble');
 const syncer=require('../../services/sync');
 const control=require('../../services/control');
 const log=require('../../utils/logger');
+const image=require('../../utils/image');
 
 function emptySlots(){return [0,1,2,3].map(slot=>({slot,path:'',size:0,status:'未选择'}))}
 function intervalValue(v){return Math.max(1,Math.min(1440,parseInt(v,10)||1))}
@@ -10,7 +11,9 @@ Page({
   data:{
     slots:emptySlots(),connected:false,syncing:false,
     currentIndex:0,currentTotal:0,progress:0,stage:'',
-    carouselEnabled:false,carouselInterval:5
+    carouselEnabled:false,carouselInterval:5,
+    ditherModes:['Floyd–Steinberg','Atkinson','无抖动'],ditherValues:['floyd','atkinson','threshold'],ditherIndex:0,
+    redThreshold:135,blackThreshold:145,previewing:false
   },
   onShow(){this.setData({connected:ble.isConnected()})},
   chooseSlot(e){
@@ -33,7 +36,7 @@ Page({
     if(!item.path)return wx.showToast({title:'请先选择图片',icon:'none'});
     this.setData({syncing:true,stage:`Slot ${slot+1} · 上传并显示`,progress:0,currentIndex:1,currentTotal:1});
     try{
-      await syncer.display(item,p=>this.setData({progress:Math.round(p*100)}));
+      await syncer.display(item,p=>this.setData({progress:Math.round(p*100)}),this.ditherOptions());
       this.setData({stage:`Slot ${slot+1} · 显示完成`,progress:100});
       wx.showToast({title:'显示完成'});
     }catch(e){
@@ -58,6 +61,22 @@ Page({
       log.error('ALBUM',`delete Slot ${slot} failed: ${err.message||err.errMsg||err}`);
       wx.showModal({title:'删除失败',content:err.message||err.errMsg||String(err),showCancel:false});
     }finally{wx.hideLoading()}
+  },
+  ditherOptions(){return {mode:this.data.ditherValues[this.data.ditherIndex],redThreshold:Number(this.data.redThreshold),blackThreshold:Number(this.data.blackThreshold),redRatio:1.35}},
+  onDitherChange(e){this.setData({ditherIndex:Number(e.detail.value)})},
+  onRedThreshold(e){this.setData({redThreshold:Math.max(80,Math.min(220,Number(e.detail.value)||135))})},
+  onBlackThreshold(e){this.setData({blackThreshold:Math.max(80,Math.min(220,Number(e.detail.value)||145))})},
+  async previewSlot(e){
+    if(this.data.syncing||this.data.previewing)return;
+    const slot=Number(e.currentTarget.dataset.slot),item=this.data.slots[slot];
+    if(!item.path)return;
+    this.setData({previewing:true});
+    try{
+      const previewPath=await image.preview(item.path,this.ditherOptions());
+      const slots=this.data.slots.slice();slots[slot]={...slots[slot],previewPath,status:'三色预览已生成'};
+      this.setData({slots});
+    }catch(err){wx.showModal({title:'预览失败',content:err.message||err.errMsg||String(err),showCancel:false})}
+    finally{this.setData({previewing:false})}
   },
   onCarouselChange(e){this.setData({carouselEnabled:e.detail.value})},
   onIntervalInput(e){this.setData({carouselInterval:e.detail.value})},
@@ -89,7 +108,7 @@ Page({
           progress:Math.round((p.fileProgress||0)*100),
           stage:`Slot ${p.slot+1} · ${stageMap[p.stage]||p.stage}`
         });
-      });
+      },this.ditherOptions());
       const minutes=intervalValue(this.data.carouselInterval);
       await control.setCarousel(this.data.carouselEnabled,minutes);
       this.setData({stage:'全部同步完成',progress:100,carouselInterval:minutes});
