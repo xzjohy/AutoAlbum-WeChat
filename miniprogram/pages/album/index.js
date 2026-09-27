@@ -27,6 +27,21 @@ Page({
       }
     });
   },
+  async displaySlot(e){
+    if(this.data.syncing)return;
+    const slot=Number(e.currentTarget.dataset.slot),item=this.data.slots[slot];
+    if(!item.path)return wx.showToast({title:'请先选择图片',icon:'none'});
+    this.setData({syncing:true,stage:`Slot ${slot+1} · 上传并显示`,progress:0,currentIndex:1,currentTotal:1});
+    try{
+      await syncer.display(item,p=>this.setData({progress:Math.round(p*100)}));
+      this.setData({stage:`Slot ${slot+1} · 显示完成`,progress:100});
+      wx.showToast({title:'显示完成'});
+    }catch(e){
+      const msg=e.message||e.errMsg||String(e);log.error('DISPLAY',msg);
+      this.setData({stage:'显示失败：'+msg});
+      wx.showModal({title:'显示失败',content:msg,showCancel:false});
+    }finally{this.setData({syncing:false})}
+  },
   async deleteSlot(e){
     if(this.data.syncing)return;
     const slot=Number(e.currentTarget.dataset.slot);
