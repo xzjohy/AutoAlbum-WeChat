@@ -10,16 +10,25 @@
     <view class="slot" wx:for="{{slots}}" wx:key="slot">
       <view class="slot-head"><text class="slot-title">Slot {{index+1}}</text><text class="muted">设备索引 {{index}}</text></view>
       <view class="slot-body">
-        <image wx:if="{{item.path}}" class="preview" src="{{item.path}}" mode="aspectFit"/>
+        <image wx:if="{{item.path}}" class="preview" src="{{item.previewPath||item.path}}" mode="aspectFit"/>
         <view wx:else class="preview empty">未选择图片</view>
         <view class="slot-actions">
           <button size="mini" data-slot="{{index}}" bindtap="chooseSlot" disabled="{{syncing}}">{{item.path?'替换':'选择图片'}}</button>
+          <button size="mini" data-slot="{{index}}" bindtap="previewSlot" disabled="{{syncing||previewing||!item.path}}">三色预览</button>
           <button size="mini" data-slot="{{index}}" bindtap="displaySlot" disabled="{{syncing||!item.path||!connected}}">上传显示</button>
           <button size="mini" data-slot="{{index}}" bindtap="deleteSlot" disabled="{{syncing}}">删除</button>
           <text class="status">{{item.status}}</text>
         </view>
       </view>
     </view>
+  </view>
+
+  <view class="card process-card">
+    <view class="row"><view><view class="section-title">SSD1683 三色处理</view><view class="muted">先锁定 RED，再对非红区域做黑白抖动</view></view></view>
+    <view class="setting-row"><text>抖动算法</text><picker range="{{ditherModes}}" value="{{ditherIndex}}" bindchange="onDitherChange"><view class="picker">{{ditherModes[ditherIndex]}} ›</view></picker></view>
+    <view class="setting-row"><text>红色阈值</text><slider min="80" max="220" value="{{redThreshold}}" show-value bindchange="onRedThreshold"/></view>
+    <view class="setting-row"><text>黑色阈值</text><slider min="80" max="220" value="{{blackThreshold}}" show-value bindchange="onBlackThreshold"/></view>
+    <view class="muted">建议先使用默认 Floyd–Steinberg。红色噪点过多可提高红色阈值；照片暗部丢失可提高黑色阈值。每个 Slot 的“三色预览”显示实际量化结果。</view>
   </view>
 
   <view class="card">
