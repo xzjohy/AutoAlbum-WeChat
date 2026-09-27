@@ -17,11 +17,11 @@
     <view class="title">时钟模式</view>
     <view class="clock-preview-tabs">
       <view class="clock-preview-card {{clockFace==='analog'?'clock-active':''}}" data-face="analog" bindtap="selectClockFace">
-        <image class="clock-preview-image" src="/assets/clock_analog_preview.png" mode="aspectFit" />
+        <image class="clock-preview-image" src="/pages/clock_analog_preview.png" mode="aspectFit" />
         <view>指针时钟</view>
       </view>
       <view class="clock-preview-card {{clockFace==='digital'?'clock-active':''}}" data-face="digital" bindtap="selectClockFace">
-        <image class="clock-preview-image" src="/assets/clock_digital_preview.png" mode="aspectFit" />
+        <image class="clock-preview-image" src="/pages/clock_digital_preview.png" mode="aspectFit" />
         <view>数字时钟</view>
       </view>
     </view>
