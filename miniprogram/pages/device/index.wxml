@@ -15,9 +15,15 @@
   </view>
   <view class="card" wx:if="{{connected&&ready}}">
     <view class="title">时钟模式</view>
-    <view class="clock-choice">
-      <button class="{{clockFace==='digital'?'clock-active':''}}" data-face="digital" bindtap="selectClockFace">数字时钟</button>
-      <button class="{{clockFace==='analog'?'clock-active':''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button>
+    <view class="clock-preview-tabs">
+      <view class="clock-preview-card {{clockFace==='analog'?'clock-active':''}}" data-face="analog" bindtap="selectClockFace">
+        <image class="clock-preview-image" src="/assets/clock_analog_preview.png" mode="aspectFit" />
+        <view>指针时钟</view>
+      </view>
+      <view class="clock-preview-card {{clockFace==='digital'?'clock-active':''}}" data-face="digital" bindtap="selectClockFace">
+        <image class="clock-preview-image" src="/assets/clock_digital_preview.png" mode="aspectFit" />
+        <view>数字时钟</view>
+      </view>
     </view>
     <view class="muted">界面文字使用英文；星期显示 MON–SUN。</view>
     <view class="clock-interval">
