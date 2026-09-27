@@ -27,4 +27,11 @@ async function start(slots,onProgress){
   }
   return selected.length;
 }
-module.exports={start};
+async function display(item,onProgress){
+  if(!ble.isConnected())throw new Error('请先连接蓝牙设备');
+  if(!item||!item.path)throw new Error('请先选择图片');
+  const fb=await image.toFramebuffer(item.path);
+  await protocol.uploadFramebuffer(fb.black,fb.red,onProgress);
+  await protocol.command(0x01,[1],90000);
+}
+module.exports={start,display};
