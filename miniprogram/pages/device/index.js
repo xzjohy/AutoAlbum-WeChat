@@ -11,7 +11,7 @@ const STAGE_TEXT={
 };
 
 Page({
-  data:{devices:[],scanning:false,connecting:false,resetting:false,connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle},
+  data:{devices:[],scanning:false,connecting:false,resetting:false,savingClock:false,connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle,clockFace:'digital',clockInterval:3},
   onShow(){
     const connected=ble.isConnected(),ready=ble.isReady();
     this.setData({connected,ready,deviceId:ble.getDeviceId(),connectionStage:ready?'ready':'idle',connectionText:ready?STAGE_TEXT.ready:STAGE_TEXT.idle});
@@ -45,6 +45,19 @@ Page({
       this.setData({connecting:false,connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle});
       wx.showModal({title:'连接失败',content:err.errMsg||err.message||String(err),showCancel:false});
     }
+  },
+  selectClockFace(e){this.setData({clockFace:e.currentTarget.dataset.face})},
+  clockIntervalInput(e){this.setData({clockInterval:e.detail.value})},
+  async saveClockSettings(){
+    if(!this.data.ready||this.data.savingClock)return;
+    this.setData({savingClock:true});
+    try{
+      const m=Math.max(1,Math.min(1440,parseInt(this.data.clockInterval,10)||3));
+      await control.setClock(this.data.clockFace,m);
+      this.setData({clockInterval:m});
+      wx.showToast({title:'时钟设置已同步'});
+    }catch(err){wx.showModal({title:'同步失败',content:err.message||err.errMsg||String(err),showCancel:false})}
+    finally{this.setData({savingClock:false})}
   },
   resetScreen(){
     if(!this.data.ready||this.data.resetting)return;
