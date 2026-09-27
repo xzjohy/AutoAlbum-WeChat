@@ -1,1 +1,2 @@
 .device{padding:24rpx 0;border-bottom:1rpx solid #eee}.device:last-child{border-bottom:0}
+.clock-choice{display:flex;gap:16rpx;margin:20rpx 0}.clock-choice button{flex:1}.clock-active{font-weight:700;border:3rpx solid currentColor}.clock-interval{display:flex;align-items:center;justify-content:space-between;margin:24rpx 0 8rpx}.clock-interval input{width:180rpx;text-align:center;border:1rpx solid #ddd;border-radius:12rpx;padding:14rpx}
