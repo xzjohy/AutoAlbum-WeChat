@@ -1,86 +1,271 @@
-const cfg=require('../config/ble');
-const log=require('../utils/logger');
-let deviceId='',ready=false,notifyHandler=null,connecting=false,listenerInstalled=false;
+const cfg = require('../config/ble');
+const log = require('../utils/logger');
 
-function p(fn,args={}){return new Promise((resolve,reject)=>fn({...args,success:resolve,fail:reject}))}
-function now(){return Date.now()}
-function alreadyOpen(e){
-  const msg=String(e&&e.errMsg||e&&e.message||'').toLowerCase();
-  return !!(e&&(e.errCode===10001||msg.includes('already opened')||msg.includes('already open')));
+let deviceId = '';
+let serviceId = '';
+let characteristicId = '';
+let mtu = 23;
+let scanCallback = null;
+let discoveryQueue = Promise.resolve();
+let listenersRegistered = false;
+const valueListeners = [];
+const characteristicListeners = [];
+const disconnectListeners = [];
+
+function p(fn, args = {}) {
+  return new Promise((resolve, reject) => fn({ ...args, success: resolve, fail: reject }));
 }
-async function open(){
-  const t=now();
-  try{await p(wx.openBluetoothAdapter)}
-  catch(e){if(!alreadyOpen(e))throw e}
-  log.info('BLE',`adapter ready ${now()-t}ms`);
+
+function uuid(value) {
+  return String(value || '').toUpperCase();
 }
-async function scan(cb){
-  await open();
-  wx.onBluetoothDeviceFound(r=>(r.devices||[]).forEach(cb));
-  await p(wx.startBluetoothDevicesDiscovery,{allowDuplicatesKey:false});
-  log.info('BLE','scan started');
+
+function errorText(error) {
+  return error && (error.errMsg || error.message) || String(error);
 }
-async function stopScan(){
-  const t=now();
-  try{await p(wx.stopBluetoothDevicesDiscovery)}
-  catch(e){}
-  log.info('BLE',`scan stopped ${now()-t}ms`);
+
+async function open() {
+  try {
+    await p(wx.openBluetoothAdapter);
+  } catch (error) {
+    if (!/\balready\s+opened\b/i.test(errorText(error))) throw error;
+  }
+  registerListeners();
+  log.info('BLE', 'adapter ready');
 }
-function installListener(){
-  if(listenerInstalled)return;
-  wx.onBLECharacteristicValueChange(r=>{
-    if(r.deviceId===deviceId&&r.characteristicId.toUpperCase()===cfg.notifyUUID.toUpperCase()&&notifyHandler)
-      notifyHandler(new Uint8Array(r.value));
+
+function registerListeners() {
+  if (listenersRegistered) return;
+  wx.onBluetoothDeviceFound(result => {
+    if (scanCallback) (result.devices || []).forEach(scanCallback);
   });
-  listenerInstalled=true;
-}
-async function connect(id,onStage){
-  if(connecting)throw new Error('设备正在连接，请稍候');
-  if(ready&&deviceId===id)return;
-  connecting=true;ready=false;
-  const total=now();
-  try{
-    onStage&&onStage('stopping-scan');
-    await stopScan();
-
-    onStage&&onStage('connecting');
-    let t=now();
-    await p(wx.createBLEConnection,{deviceId:id});
-    deviceId=id;
-    log.info('BLE',`link connected ${now()-t}ms`);
-
-    installListener();
-    onStage&&onStage('initializing');
-    t=now();
-    await p(wx.notifyBLECharacteristicValueChange,{
-      deviceId:id,serviceId:cfg.serviceUUID,characteristicId:cfg.notifyUUID,state:true
-    });
-    log.info('BLE',`notify enabled ${now()-t}ms`);
-    ready=true;
-    onStage&&onStage('ready');
-    log.info('BLE',`READY total=${now()-total}ms device=${id}`);
-  }catch(e){
-    ready=false;
-    if(deviceId===id){
-      try{await p(wx.closeBLEConnection,{deviceId:id})}catch(ignore){}
-      deviceId='';
+  wx.onBLECharacteristicValueChange(result => {
+    if (result.deviceId !== deviceId) return;
+    if (uuid(result.characteristicId) === uuid(characteristicId)) {
+      valueListeners.slice().forEach(listener => listener(result.value));
     }
-    log.error('BLE',`connect failed after ${now()-total}ms: ${e.errMsg||e.message||e}`);
-    throw e;
-  }finally{connecting=false}
+    characteristicListeners.slice().forEach(entry => {
+      if (uuid(entry.characteristicId) === uuid(result.characteristicId)) entry.listener(result.value);
+    });
+  });
+  wx.onBLEConnectionStateChange(result => {
+    if (result.deviceId !== deviceId || result.connected) return;
+    const disconnectedId = deviceId;
+    deviceId = '';
+    serviceId = '';
+    characteristicId = '';
+    log.warn('BLE', 'disconnected ' + disconnectedId);
+    disconnectListeners.slice().forEach(listener => listener());
+  });
+  listenersRegistered = true;
 }
-async function disconnect(){
-  if(!deviceId)return;
-  const id=deviceId;deviceId='';ready=false;connecting=false;
-  try{await p(wx.closeBLEConnection,{deviceId:id})}
-  finally{log.info('BLE','disconnected '+id)}
+
+function queueDiscovery(operation) {
+  const result = discoveryQueue.then(operation);
+  discoveryQueue = result.catch(() => {});
+  return result;
 }
-async function write(buffer){
-  if(!deviceId||!ready)throw new Error('BLE device not ready');
-  return p(wx.writeBLECharacteristicValue,{deviceId,serviceId:cfg.serviceUUID,characteristicId:cfg.writeUUID,value:buffer,writeType:cfg.writeType});
+
+async function stopDiscovery() {
+  scanCallback = null;
+  try {
+    await p(wx.stopBluetoothDevicesDiscovery);
+  } catch (error) {
+    // Discovery may already be stopped.
+  }
 }
-function setNotifyHandler(fn){notifyHandler=fn}
-module.exports={
-  scan,stopScan,connect,disconnect,write,setNotifyHandler,
-  isConnected:()=>!!deviceId,isReady:()=>ready,isConnecting:()=>connecting,getDeviceId:()=>deviceId
+
+function scan(callback) {
+  return queueDiscovery(async () => {
+    await stopDiscovery();
+    await open();
+    scanCallback = callback;
+    await p(wx.startBluetoothDevicesDiscovery, { allowDuplicatesKey: true, interval: 500 });
+    try {
+      const cached = await p(wx.getBluetoothDevices);
+      (cached.devices || []).forEach(callback);
+    } catch (error) {
+      log.warn('BLE', 'cached devices unavailable ' + errorText(error));
+    }
+    log.info('BLE', 'scan started');
+  });
+}
+
+function stopScan() {
+  return queueDiscovery(stopDiscovery);
+}
+
+async function discoverCharacteristic(id) {
+  const services = await p(wx.getBLEDeviceServices, { deviceId: id });
+  const service = (services.services || []).find(item => uuid(item.uuid) === uuid(cfg.serviceUUID));
+  if (!service) throw new Error('设备不是配套墨水屏：未找到图片服务');
+  const characteristics = await p(wx.getBLEDeviceCharacteristics, {
+    deviceId: id,
+    serviceId: service.uuid
+  });
+  const characteristic = (characteristics.characteristics || []).find(
+    item => uuid(item.uuid) === uuid(cfg.characteristicUUID)
+  );
+  if (!characteristic) throw new Error('设备固件不匹配：未找到图片传输特征值');
+  if (!characteristic.properties || !characteristic.properties.write) {
+    throw new Error('设备图片特征值不支持可靠写入');
+  }
+  if (!characteristic.properties.notify && !characteristic.properties.indicate) {
+    throw new Error('设备固件过旧：图片特征值不支持状态通知');
+  }
+  return { serviceId: service.uuid, characteristicId: characteristic.uuid };
+}
+
+async function findCharacteristic(targetServiceUUID, targetCharacteristicUUID) {
+  if (!deviceId) throw new Error('请先连接墨水屏');
+  const services = await p(wx.getBLEDeviceServices, { deviceId });
+  const service = (services.services || []).find(item => uuid(item.uuid) === uuid(targetServiceUUID));
+  if (!service) throw new Error('设备未提供所需蓝牙服务');
+  const result = await p(wx.getBLEDeviceCharacteristics, { deviceId, serviceId: service.uuid });
+  const characteristic = (result.characteristics || []).find(
+    item => uuid(item.uuid) === uuid(targetCharacteristicUUID)
+  );
+  if (!characteristic) throw new Error('设备未提供所需蓝牙特征值');
+  return { serviceId: service.uuid, characteristicId: characteristic.uuid, properties: characteristic.properties || {} };
+}
+
+async function negotiateMTU(id) {
+  try {
+    await p(wx.setBLEMTU, { deviceId: id, mtu: cfg.preferredMTU });
+  } catch (error) {
+    log.warn('BLE', 'MTU request skipped ' + errorText(error));
+  }
+  try {
+    const result = await p(wx.getBLEMTU, { deviceId: id, writeType: cfg.writeType });
+    if (result.mtu) mtu = result.mtu;
+  } catch (error) {
+    log.warn('BLE', 'MTU query unavailable; using 23');
+  }
+  log.info('BLE', 'MTU ' + mtu);
+}
+
+async function connect(id) {
+  await stopScan();
+  await open();
+  if (deviceId && deviceId !== id) await disconnect();
+  await p(wx.createBLEConnection, { deviceId: id, timeout: 10000 });
+  try {
+    await negotiateMTU(id);
+    const found = await discoverCharacteristic(id);
+    deviceId = id;
+    serviceId = found.serviceId;
+    characteristicId = found.characteristicId;
+    await p(wx.notifyBLECharacteristicValueChange, {
+      deviceId, serviceId, characteristicId, state: true
+    });
+    log.info('BLE', 'connected ' + id);
+  } catch (error) {
+    try { await p(wx.closeBLEConnection, { deviceId: id }); } catch (ignored) {}
+    throw error;
+  }
+}
+
+async function disconnect() {
+  if (!deviceId) return;
+  const id = deviceId;
+  deviceId = '';
+  serviceId = '';
+  characteristicId = '';
+  await p(wx.closeBLEConnection, { deviceId: id });
+  log.info('BLE', 'disconnected ' + id);
+  disconnectListeners.slice().forEach(listener => listener());
+}
+
+// Release the link when the mini program is no longer active.  Turning off
+// notifications first lets the firmware return to advertising immediately;
+// disconnect() remains safe to call repeatedly.
+async function release() {
+  await stopScan();
+  if (!deviceId) return;
+  const target = { deviceId, serviceId, characteristicId };
+  if (target.serviceId && target.characteristicId) {
+    try {
+      await p(wx.notifyBLECharacteristicValueChange, {
+        deviceId: target.deviceId,
+        serviceId: target.serviceId,
+        characteristicId: target.characteristicId,
+        state: false
+      });
+    } catch (error) {
+      // A peripheral may already have stopped notifications while disconnecting.
+      log.warn('BLE', 'stop notifications skipped ' + errorText(error));
+    }
+  }
+  await disconnect();
+}
+
+function toArrayBuffer(value) {
+  if (value instanceof ArrayBuffer) return value;
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+async function write(value) {
+  if (!deviceId || !serviceId || !characteristicId) throw new Error('请先连接墨水屏');
+  return p(wx.writeBLECharacteristicValue, {
+    deviceId, serviceId, characteristicId,
+    value: toArrayBuffer(value),
+    writeType: cfg.writeType
+  });
+}
+
+async function enableNotifications(target) {
+  if (!deviceId) throw new Error('请先连接墨水屏');
+  await p(wx.notifyBLECharacteristicValueChange, {
+    deviceId,
+    serviceId: target.serviceId,
+    characteristicId: target.characteristicId,
+    state: true
+  });
+}
+
+async function writeCharacteristic(target, value, writeType = cfg.writeType) {
+  if (!deviceId) throw new Error('请先连接墨水屏');
+  return p(wx.writeBLECharacteristicValue, {
+    deviceId,
+    serviceId: target.serviceId,
+    characteristicId: target.characteristicId,
+    value: toArrayBuffer(value),
+    writeType
+  });
+}
+
+function addUnique(list, listener) {
+  if (!list.includes(listener)) list.push(listener);
+  return () => {
+    const index = list.indexOf(listener);
+    if (index >= 0) list.splice(index, 1);
+  };
+}
+
+module.exports = {
+  scan,
+  stopScan,
+  connect,
+  disconnect,
+  release,
+  write,
+  findCharacteristic,
+  enableNotifications,
+  writeCharacteristic,
+  onValue: listener => addUnique(valueListeners, listener),
+  onCharacteristicValue: (targetCharacteristicId, listener) => {
+    const entry = { characteristicId: targetCharacteristicId, listener };
+    characteristicListeners.push(entry);
+    return () => {
+      const index = characteristicListeners.indexOf(entry);
+      if (index >= 0) characteristicListeners.splice(index, 1);
+    };
+  },
+  onDisconnect: listener => addUnique(disconnectListeners, listener),
+  isConnected: () => !!deviceId,
+  getDeviceId: () => deviceId,
+  getImageChunkSize: () => Math.max(12, Math.min(236, mtu - 11)),
+  getRawWriteSize: () => Math.max(20, Math.min(244, mtu - 3)),
+  isLikelyScreen: device => (device.name || device.localName || '').startsWith(cfg.deviceNamePrefix)
 };

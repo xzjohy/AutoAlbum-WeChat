@@ -1,1 +1,29 @@
-{"pages":["pages/album/index","pages/device/index","pages/logs/index"],"window":{"navigationBarTitleText":"自动相册","navigationBarBackgroundColor":"#ffffff","navigationBarTextStyle":"black","backgroundColor":"#f5f5f5"},"tabBar":{"color":"#777777","selectedColor":"#111111","backgroundColor":"#ffffff","list":[{"pagePath":"pages/album/index","text":"相册"},{"pagePath":"pages/device/index","text":"设备"},{"pagePath":"pages/logs/index","text":"日志"}]}}
+{
+  "pages": [
+    "pages/device/index",
+    "pages/album/index",
+    "pages/control/index",
+    "pages/ota/index",
+    "pages/logs/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "E-Paper Link",
+    "navigationBarBackgroundColor": "#08111c",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#07101a",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#6f8498",
+    "selectedColor": "#22cedd",
+    "backgroundColor": "#09131f",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/device/index", "text": "设备" },
+      { "pagePath": "pages/album/index", "text": "图片" },
+      { "pagePath": "pages/control/index", "text": "控制" },
+      { "pagePath": "pages/ota/index", "text": "升级" },
+      { "pagePath": "pages/logs/index", "text": "日志" }
+    ]
+  }
+}

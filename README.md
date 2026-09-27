@@ -1,184 +1,39 @@
 # AutoAlbum-WeChat
 
-面向 **TLSR8359F512 + SSD1683 + 400×300 黑/白/红三色电子墨水屏** 的微信小程序控制端。
-
-小程序负责手机端图片选择、400×300 三色量化/抖动、BLE framebuffer 传输、4 槽离线相册管理、自动轮播设置以及屏幕故障恢复。设备端负责保存 framebuffer、驱动 SSD1683 和断开手机后的离线轮播。
-
-> 微信小程序源码统一位于 `miniprogram/` 目录。仓库根目录只作为项目入口，保留微信开发者工具配置和项目文档。
-
-## 目录结构
-
-```text
-AutoAlbum-WeChat/
-├─ README.md
-├─ project.config.json          # 微信开发者工具配置，miniprogramRoot=miniprogram/
-└─ miniprogram/                 # 微信小程序全部源码
-   ├─ app.js                    # 小程序入口
-   ├─ app.json                  # 页面、窗口和 TabBar
-   ├─ app.wxss                  # 全局样式
-   ├─ sitemap.json              # 索引配置
-   ├─ config/
-   │  └─ ble.js                 # BLE UUID、写入方式、400×300/BWR 参数
-   ├─ services/
-   │  ├─ ble.js                 # 扫描、连接、Notify、写入、连接状态和耗时日志
-   │  ├─ protocol.js            # token/status、CRC、framebuffer 上传、紧急复位传输
-   │  ├─ control.js             # Flash Slot、轮播、屏幕复位高级命令
-   │  └─ sync.js                # 转换→上传→CRC→Flash 保存顺序同步
-   ├─ utils/
-   │  ├─ image.js               # BWR 转换、RED 保护、Floyd/Atkinson/阈值处理
-   │  └─ logger.js              # 运行日志
-   └─ pages/
-      ├─ album/                 # 四槽相册、预览、显示、同步、轮播、抖动设置
-      ├─ device/                # BLE 扫描/连接/断开、READY 状态、重置屏幕
-      └─ logs/                  # 日志查看
-```
+自动相册微信小程序：通过 BLE 将本地图片依次同步到 SSD1683 400×300 黑白红墨水屏。
 
 ## 功能
+- 识别 `S24_` 设备，连接并校验配套 GATT 服务与状态协议
+- 单张图片同步，以及最多 4 张黑白红三色图片写入设备 Flash 的离线轮播
+- 离线轮播间隔可设为 5–120 分钟，支持暂停和继续；手机断开后仍由设备自动换图
+- 轮播图片既可从手机相册多选，也可从手机文件选择；仅保留 JPG、JPEG、PNG、BMP 和 WebP
+- 图片支持调用微信编辑器裁剪，并可为每张图片设置 0–100% 灰度
+- 图片居中裁切为 400×300，并用黑白红 Atkinson 抖动生成双图层
+- 按网页工具协议分包上传、校验双图层 CRC，并等待设备确认刷新结果
+- 三色全刷与黑白兼容全刷
+- 图片、时钟、关闭三态切换；两个模式不能同时开启，也可以同时关闭
+- 时钟模式支持同步当前时间或手动设置日期时间，并校验格式、日期、闰年及时分秒范围
+- 清屏全黑、清屏全白、时钟全刷及高级十六进制指令
+- 带文件标识、设备端校验和旧固件兼容处理的 BLE OTA
+- 连接后读取并显示固件版本，以及离线轮播当前显示序号
+- 深色科技主题，以及设备、图片、控制、升级、日志五个功能页
 
-### BLE 连接
-支持扫描、连接、断开和 Notify。连接过程按“停止扫描 → 建立 BLE → 初始化 Notify → READY”分阶段显示，并记录连接耗时；同时防止重复点击并兼容 Adapter already-open 情况。
+API 图片源和手动局部刷新保留为未开放入口。离线轮播需要烧录支持 Flash 图片槽位和扩展状态包的配套固件。
 
-- Service：`13187B10-EBA9-A3BA-044E-83D3217D9A38`
-- Characteristic：`4B646063-6264-F3A7-8941-E65356EA82FE`
+> 当前实现与 `SSD1683-clock-3min/web_tools` 及配套固件 2.1.1 对齐。第一次使用仍需确保设备已具备状态通知协议；OTA 安装前会核对设备端完整校验值。
 
-### SSD1683 三色图片
-手机端直接生成固件使用的 400×300 framebuffer：
+## 导入
+使用微信开发者工具导入仓库根目录，`miniprogramRoot` 已配置为 `miniprogram/`。BLE 扫描和传输请用手机微信预览或真机调试。
 
-- BLACK plane：15000 bytes
-- RED plane：15000 bytes
-- 合计：30000 bytes
-- BLACK：`0=黑`、`1=背景`
-- RED：`1=红色墨水`
+图片编辑后可转换当前图片或批量转换，并放大预览实际黑白红像素。上传只发送固定 400×300 的双位图图层，每层 15,000 字节、每张 30,000 字节（29.3 KiB），不发送原图或预览 PNG。多张图片逐张发送并等待保存确认；发送前会校验图层类型及长度。设备实际 RAM 峰值仍需配套固件验证。
 
-支持 Floyd–Steinberg、Atkinson、无抖动阈值模式、RED 独立保护、蛇形误差扩散、红色/黑色阈值调整和三色预览。
+联调时请使用支持扩展状态包、时钟样式和刷新间隔配置的配套 2.1.1 固件。设备轮播状态独立于本地待上传图片；切换单张/轮播页签不会暂停设备。暂停后可编辑并重新上传。间隔可直接应用到已保存图片，应用后从首张重新轮播。断开时只显示最后确认状态，重连后读取最新序号。当前已完成模拟验证，仍需手机与墨水屏真机联调。
 
-### BLE/EPD 命令
+## 2.0.1 连接释放
+- 切换小程序内的设备、图片、控制等页面时保持 BLE 连接，方便连续操作。
+- 小程序进入后台或设备页被真正销毁时，会先关闭状态通知、停止扫描并释放 BLE 连接，使墨水屏尽快恢复广播。
+- 设备端也会在连续 60 秒空闲后主动断开连接，作为手机异常退出或系统未触发后台回调时的兜底。
 
-| 命令 | 作用 |
-| --- | --- |
-| `0x00` | 开始 framebuffer 上传 |
-| `0x03` | 分块发送 BLACK/RED plane |
-| `0x08` | CRC-16/CCITT-FALSE 双图层校验 |
-| `0x01` | framebuffer 刷新到屏幕 |
-| `0x09` | 保存 framebuffer 到 Flash Slot |
-| `0x0A` | 删除 Flash Slot |
-| `0x0B` | 设置离线自动轮播 |
-| `0x0C` | FORCE_EPD_RESET 强制恢复屏幕 |
-
-CRC 字段使用大端序；轮播 interval 使用 LE16。
-
-### 四槽离线相册
-设备固定提供 4 个槽位。UI Slot 1～4 对应固件 Slot 0～3。支持选择/替换图片、三色预览、上传并显示、保存 Flash、删除设备槽位。
-
-“一键同步到设备”的顺序为：
-
-```text
-图片转换 → BLACK/RED 上传 → CRC 校验 → Flash 保存 → 下一张
-```
-
-### 离线轮播
-可开启/关闭轮播并设置 1～1440 分钟间隔。图片保存到设备 Flash 后，微信小程序断开 BLE 不影响设备自主轮播。
-
-### 重置屏幕
-设备页提供“重置屏幕”，用于 SSD1683 BUSY 异常、刷新超时、传输中断或状态机卡在 PREPARING/REFRESHING。
-
-`0x0C FORCE_EPD_RESET` 是紧急恢复通道：小程序可中止旧 command waiter；配套固件在普通 pending/status/epd_update_state BUSY 判断之前处理它。
-
-恢复只针对 EPD 控制链：
-
-```text
-取消图片上传
-→ 清除 pending command
-→ 清除 EPD 软件 BUSY
-→ 终止旧时钟刷新状态
-→ SSD1683 POWER OFF
-→ RESET
-→ 重新初始化控制接口
-→ DONE / READY
-```
-
-它**不会擦除 Flash、不会删除 4 张离线图片、不会修改轮播设置、不会 MCU reboot，也不会主动清屏**。电子墨水屏掉电保持当前物理画面。
-
-## 主要文件职责
-
-| 文件 | 作用 |
-| --- | --- |
-| `project.config.json` | 微信开发者工具入口配置 |
-| `miniprogram/app.js` | 应用启动入口 |
-| `miniprogram/app.json` | 页面路由、窗口、TabBar |
-| `miniprogram/app.wxss` | 全局 UI 样式 |
-| `miniprogram/config/ble.js` | BLE UUID、写入类型、屏幕参数 |
-| `miniprogram/services/ble.js` | BLE Adapter、扫描、连接、Notify、Write |
-| `miniprogram/services/protocol.js` | EPD 数据协议、状态确认、CRC、紧急复位 |
-| `miniprogram/services/control.js` | Slot、轮播、Reset 控制封装 |
-| `miniprogram/services/sync.js` | 多 Slot 顺序同步 |
-| `miniprogram/utils/image.js` | 400×300 BWR framebuffer 生成 |
-| `miniprogram/utils/logger.js` | 日志记录 |
-| `miniprogram/pages/album/*` | 相册主界面和图片操作 |
-| `miniprogram/pages/device/*` | BLE 设备管理和屏幕复位 |
-| `miniprogram/pages/logs/*` | 日志界面 |
-
-## 导入微信开发者工具
-
-1. Clone/下载本仓库。
-2. 微信开发者工具选择“导入项目”。
-3. 选择仓库根目录 `AutoAlbum-WeChat/`。
-4. `project.config.json` 已配置 `miniprogramRoot: "miniprogram/"`。
-5. 正式发布前把测试 AppID 替换为实际小程序 AppID。
-6. BLE 功能建议使用真机调试。
-
-## 配套固件
-
-配套仓库：`xzjohy/eink-gpt`
-
-目标硬件：
-
-- MCU：TLSR8359F512
-- EPD Controller：SSD1683
-- Panel：400×300 黑/白/红三色电子墨水屏
-
-小程序和固件协议需要保持一致。使用“重置屏幕”前，设备必须烧录支持 `0x0C FORCE_EPD_RESET` 的新版固件。
-
-## 变更记录
-
-### 2026-09-27 · 屏幕恢复与连接体验
-- 新增 `0x0C FORCE_EPD_RESET` 控制入口。
-- 新增“重置屏幕”按钮。
-- 紧急复位绕过小程序本地旧 command waiter。
-- BLE 增加 connecting / initializing / ready 阶段。
-- 增加连接与 Notify 初始化耗时日志。
-- 增加防重复点击和 Adapter already-open 兼容。
-
-### 2026-09-27 · SSD1683 三色处理
-- 新增 RED-safe 三色量化。
-- 新增 Floyd–Steinberg、Atkinson、阈值模式。
-- 新增蛇形误差扩散。
-- BLACK/WHITE 误差不扩散到 RED 像素。
-- 新增红色/黑色阈值调节。
-- 新增每槽三色预览。
-- 预览、显示和同步使用同一处理参数。
-
-### 2026-09-26 · 四槽离线相册
-- 固定 4 Slot 设备相册。
-- 支持选择、替换、删除和上传显示。
-- 新增顺序一键同步。
-- 新增 Flash Slot 保存/删除。
-- 新增 1～1440 分钟离线自动轮播。
-- 支持删除仅存在设备 Flash 的槽位。
-
-### 2026-09-26 · 固件协议对齐
-- BLE UUID 与 SSD1683 固件对齐。
-- 上传改为 BLACK + RED 双 plane。
-- 每 plane 固定 15000 bytes。
-- 新增 CRC-16/CCITT-FALSE。
-- 新增 token/status 命令确认。
-- 修复 BLE 重连后 Notify handler 丢失。
-
-### 初始版本
-- 建立 AutoAlbum 微信小程序。
-- 提供相册、BLE 设备和日志页面。
-
-## 注意事项
-- BLE、刷新时间和 BUSY 行为以真机 + 实际 SSD1683 面板测试为准。
-- 图片解码与三色量化在手机端完成，设备端不需要 JPEG/PNG 解码。
-- FORCE_EPD_RESET 是 EPD 故障恢复，不等同 MCU reboot。
+## 2.0.2 时钟预览与上传重置
+- 控制页可选择数码或指针时钟，并预览当前输入的时间；开启时钟模式会同步所选样式。
+- 图片同步或离线轮播写入卡住时，点击“重置并终止上传”会停止本次传输并断开连接。重新连接后即可再次上传。

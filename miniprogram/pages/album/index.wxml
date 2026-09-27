@@ -1,54 +1,92 @@
 <view class="page">
-  <view class="card">
+  <canvas type="2d" id="conversion-canvas" class="conversion-canvas"></canvas>
+  <view class="hero album-hero">
+    <view class="eyebrow">E-PAPER STUDIO</view>
+    <view class="hero-title">图片中心</view>
+    <view class="hero-sub">400 × 300 · 黑白红智能转换</view>
+    <view class="connection {{connected ? 'online' : ''}}"><view class="dot"></view>{{connected ? 'S24 墨水屏在线' : '设备未连接'}}</view>
+  </view>
+
+  <view class="mode-tabs">
+    <button class="mode-tab {{imageMode === 'single' ? 'active' : ''}}" disabled="{{syncing || converting}}" data-mode="single" bindtap="selectImageMode">单张图片</button>
+    <button class="mode-tab {{imageMode === 'carousel' ? 'active' : ''}}" disabled="{{syncing || converting}}" data-mode="carousel" bindtap="selectImageMode">文件夹轮播</button>
+    <button class="mode-tab disabled-tab" disabled>API <text>待开放</text></button>
+  </view>
+
+  <view class="panel mode-control">
+    <view><view class="panel-title">图片显示模式</view><view class="muted">停止时钟自动刷新，保持当前图片画面</view></view>
+    <switch color="#21d3df" checked="{{imageDisplayActive}}" disabled="{{!connected || syncing || converting}}" bindchange="toggleImageMode"/>
+  </view>
+
+  <view class="panel">
     <view class="row">
-      <view><view class="title">设备相册</view><view class="muted">400×300 · BLACK + RED · Flash 4 槽</view></view>
-      <view class="badge">{{connected?'已连接':'未连接'}}</view>
+      <view><view class="panel-title">{{imageMode === 'single' ? '当前画面' : '三色离线轮播'}}</view><view class="muted">{{images.length}} / {{imageMode === 'single' ? 1 : 4}} 张</view></view>
+      <view class="counter">{{images.length}}</view>
     </view>
-  </view>
-
-  <view class="card">
-    <view class="slot" wx:for="{{slots}}" wx:key="slot">
-      <view class="slot-head"><text class="slot-title">Slot {{index+1}}</text><text class="muted">设备索引 {{index}}</text></view>
-      <view class="slot-body">
-        <image wx:if="{{item.path}}" class="preview" src="{{item.previewPath||item.path}}" mode="aspectFit"/>
-        <view wx:else class="preview empty">未选择图片</view>
-        <view class="slot-actions">
-          <button size="mini" data-slot="{{index}}" bindtap="chooseSlot" disabled="{{syncing}}">{{item.path?'替换':'选择图片'}}</button>
-          <button size="mini" data-slot="{{index}}" bindtap="previewSlot" disabled="{{syncing||previewing||!item.path}}">三色预览</button>
-          <button size="mini" data-slot="{{index}}" bindtap="displaySlot" disabled="{{syncing||!item.path||!connected}}">上传显示</button>
-          <button size="mini" data-slot="{{index}}" bindtap="deleteSlot" disabled="{{syncing}}">删除</button>
-          <text class="status">{{item.status}}</text>
-        </view>
+    <view class="empty" wx:if="{{!images.length}}">
+      <view class="empty-icon">▧</view>
+      <view>{{imageMode === 'single' ? '选择一张图片开始' : '选择最多 4 张三色图片写入设备'}}</view>
+      <view class="muted">自动裁切并转换为墨水屏色彩</view>
+    </view>
+    <scroll-view scroll-x class="photo-strip" wx:else>
+      <view class="photo {{index === selectedIndex ? 'selected' : ''}}" wx:for="{{images}}" wx:key="path" data-index="{{index}}" bindtap="selectPhoto">
+        <image src="{{item.previewPath || item.path}}" mode="aspectFill"/><text>{{index + 1}}</text>
       </view>
+    </scroll-view>
+    <button class="tech-btn ghost" disabled="{{syncing || converting}}" bindtap="chooseImages">＋ {{imageMode === 'single' ? '从手机相册选择' : '从手机相册多选'}}</button>
+    <button wx:if="{{imageMode === 'carousel'}}" class="tech-btn file-btn" disabled="{{syncing || converting}}" bindtap="chooseImageFiles">⌁ 从手机文件选择图片</button>
+  </view>
+
+  <view class="panel edit-panel" wx:if="{{images.length}}">
+    <view class="row"><view><view class="panel-title">图片编辑</view><view class="muted">正在编辑第 {{selectedIndex + 1}} 张</view></view><button class="mini-action" disabled="{{syncing || converting || (carouselRunning && !carouselPaused)}}" bindtap="editSelectedImage">裁剪图片</button></view>
+    <view class="gray-row"><text>灰度</text><text>{{grayscale}}%</text></view>
+    <slider min="0" max="100" step="5" value="{{grayscale}}" activeColor="#21d3df" backgroundColor="#263b4e" block-size="18" disabled="{{syncing || converting || (carouselRunning && !carouselPaused)}}" bindchange="setGrayscale"/>
+    <view class="format-hint">0% 保留原色，100% 转为灰度；每张图片分别保存黑色层和红色层。</view>
+    <view class="conversion-actions">
+      <button class="mini-action" disabled="{{syncing || converting}}" loading="{{converting}}" bindtap="convertSelected">转换当前图片</button>
+      <button class="mini-action" wx:if="{{images.length > 1}}" disabled="{{syncing || converting}}" bindtap="convertAll">全部转换</button>
+    </view>
+    <view class="muted">{{previewMessage}}</view>
+    <view wx:if="{{images[selectedIndex].previewPath}}" class="converted-preview" bindtap="previewConverted">
+      <image src="{{images[selectedIndex].previewPath}}" mode="aspectFit"/>
+      <view class="muted">{{images[selectedIndex].sizeLabel}}</view>
+      <view class="muted">400 × 300 · 点击放大，左右滑动查看已转换图片</view>
+    </view>
+    <view class="format-hint">按屏幕分辨率缩小并打包为黑色、红色双图层，每张 30,000 字节（29.3 KB）。预览 PNG 用于查看，上传使用相同图层。</view>
+  </view>
+
+  <view class="panel settings-panel">
+    <view class="setting-row" wx:if="{{imageMode === 'single'}}">
+      <view><view>黑白兼容刷新</view><view class="muted">单张图片将红色墨水转换为黑色</view></view>
+      <switch color="#21d3df" checked="{{monochrome}}" disabled="{{syncing || converting}}" bindchange="setMonochrome"/>
+    </view>
+    <view wx:if="{{imageMode === 'carousel'}}" class="interval-setting">
+      <view class="setting-row"><view><view>设备轮播间隔</view><view class="muted">5–120 分钟，手机断开后仍会运行</view></view><view class="interval-input"><input type="number" value="{{intervalDraft}}" disabled="{{syncing || converting}}" bindinput="inputInterval" bindblur="normalizeInterval"/><text>分钟</text></view></view>
+      <view class="muted">设置后点击下方按钮应用到设备。</view>
+      <view class="preset-row"><button disabled="{{syncing || converting}}" data-minutes="5" bindtap="selectInterval">5 分钟</button><button disabled="{{syncing || converting}}" data-minutes="15" bindtap="selectInterval">15 分钟</button><button disabled="{{syncing || converting}}" data-minutes="30" bindtap="selectInterval">30 分钟</button><button disabled="{{syncing || converting}}" data-minutes="60" bindtap="selectInterval">60 分钟</button><button disabled="{{syncing || converting}}" data-minutes="120" bindtap="selectInterval">120 分钟</button></view>
+      <button wx:if="{{carouselCount > 0}}" class="tech-btn ghost" disabled="{{!connected || syncing || converting}}" bindtap="applyInterval">应用间隔并从首张重新轮播</button>
     </view>
   </view>
 
-  <view class="card process-card">
-    <view class="row"><view><view class="section-title">SSD1683 三色处理</view><view class="muted">先锁定 RED，再对非红区域做黑白抖动</view></view></view>
-    <view class="setting-row"><text>抖动算法</text><picker range="{{ditherModes}}" value="{{ditherIndex}}" bindchange="onDitherChange"><view class="picker">{{ditherModes[ditherIndex]}} ›</view></picker></view>
-    <view class="setting-row"><text>红色阈值</text><slider min="80" max="220" value="{{redThreshold}}" show-value bindchange="onRedThreshold"/></view>
-    <view class="setting-row"><text>黑色阈值</text><slider min="80" max="220" value="{{blackThreshold}}" show-value bindchange="onBlackThreshold"/></view>
-    <view class="muted">建议先使用默认 Floyd–Steinberg。红色噪点过多可提高红色阈值；照片暗部丢失可提高黑色阈值。每个 Slot 的“三色预览”显示实际量化结果。</view>
+  <view class="panel" wx:if="{{carouselCount > 0}}">
+    <view class="panel-title">设备已保存 {{carouselCount}} 张</view>
+    <view class="muted">{{connected ? '设备确认' : '断开前最后状态'}}：{{carouselIndex >= 0 ? '第 ' + (carouselIndex + 1) + ' 张' : '尚未显示'}} · {{carouselPaused ? '已暂停' : (carouselRunning ? '轮播中' : '未启动')}}</view>
+    <button wx:if="{{carouselRunning && !carouselPaused}}" class="tech-btn stop" disabled="{{!connected || syncing || converting}}" bindtap="stopCarousel">暂停设备轮播</button>
+    <button wx:else class="tech-btn" disabled="{{!connected || syncing || converting}}" bindtap="resumeCarousel">继续设备轮播</button>
   </view>
 
-  <view class="card">
-    <view class="row"><text>自动轮播</text><switch checked="{{carouselEnabled}}" bindchange="onCarouselChange" disabled="{{syncing}}"/></view>
-    <view class="interval-row">
-      <text>轮播间隔（分钟）</text>
-      <input type="number" value="{{carouselInterval}}" bindinput="onIntervalInput" bindblur="onIntervalBlur" disabled="{{syncing}}"/>
-    </view>
-    <view class="muted">范围 1～1440 分钟。设置写入设备 Flash，手机断开后设备仍会自行轮播。</view>
-    <button class="btn" bindtap="applyCarousel" disabled="{{!connected||syncing}}">保存轮播设置</button>
+  <view class="panel progress-panel" wx:if="{{stage}}">
+    <view class="row"><text>{{stage}}</text><text class="percent">{{carouselRunning ? (carouselIndex >= 0 ? '第 ' + (carouselIndex + 1) + ' 张' : '待显示') : progress + '%'}}</text></view>
+    <view class="progress-track"><view class="progress-fill" style="width:{{progress}}%"></view></view>
+    <button wx:if="{{syncing || converting}}" class="stop-upload" bindtap="resetTransfer">停止当前上传</button>
   </view>
 
-  <view class="card">
-    <button class="btn" type="primary" bindtap="sync" disabled="{{!connected||syncing}}">
-      {{syncing?'正在同步':'一键同步到设备'}}
-    </button>
-    <view wx:if="{{syncing||stage}}" class="sync-box">
-      <view class="row"><text>{{stage}}</text><text wx:if="{{currentTotal}}">{{currentIndex}}/{{currentTotal}}</text></view>
-      <progress percent="{{progress}}" show-info stroke-width="6"/>
-      <view class="muted">BLE 上传 {{progress}}% · CRC 通过后才写入对应 Flash Slot</view>
-    </view>
+  <view class="connection-required" wx:if="{{!connected}}">
+    <view>同步需要先连接墨水屏</view>
+    <button bindtap="goToDevice">前往连接设备</button>
   </view>
+
+  <button wx:if="{{imageMode === 'single'}}" class="tech-btn" disabled="{{!connected || !images.length || syncing || converting}}" loading="{{syncing}}" bindtap="syncSingle">同步当前图片</button>
+  <button wx:else class="tech-btn" disabled="{{!connected || !images.length || syncing || converting || (carouselRunning && !carouselPaused)}}" loading="{{syncing}}" bindtap="startCarousel">上传并启动离线轮播</button>
+  <button class="text-btn" wx:if="{{images.length && !syncing && !converting && (!carouselRunning || carouselPaused)}}" bindtap="clear">清空图片</button>
 </view>

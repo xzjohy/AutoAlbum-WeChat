@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="hero ota-hero">
+    <view class="eyebrow">SECURE BLE UPDATE</view>
+    <view class="hero-title">蓝牙 OTA</view>
+    <view class="hero-sub">设备端校验通过后才会安装</view>
+    <view class="connection {{connected ? 'online' : ''}}"><view class="dot"></view>{{connected ? '设备在线' : '设备未连接'}}</view>
+  </view>
+
+  <view class="panel firmware-card">
+    <view class="firmware-icon">BIN</view>
+    <view class="firmware-name">{{file ? file.name : '尚未选择固件'}}</view>
+    <view class="muted">{{file ? file.size + ' bytes' : '仅支持 Telink KNLT .bin，最大 130816 字节'}}</view>
+    <button class="tech-btn ghost" disabled="{{updating}}" bindtap="chooseFirmware">选择固件文件</button>
+  </view>
+
+  <view class="panel" wx:if="{{file || updating}}">
+    <view class="row"><view class="panel-title">升级进度</view><view class="percent">{{progress}}%</view></view>
+    <view class="progress-track"><view class="progress-fill" style="width:{{progress}}%"></view></view>
+    <view class="stage">{{stage}}</view>
+  </view>
+
+  <button class="tech-btn danger" disabled="{{!connected || !file || updating}}" loading="{{updating}}" bindtap="updateFirmware">
+    {{updating ? '升级进行中，请勿断电' : '开始安全升级'}}
+  </button>
+  <view class="warning">升级会先写入备用区域并核对完整校验值。最终安装及重启期间请勿断电。</view>
+</view>

@@ -1,1 +1,13 @@
-<view class="page"><view class="card"><view class="row"><view class="title">运行日志</view><button size="mini" bindtap="clear">清空</button></view></view><view class="card log" wx:for="{{logs}}" wx:key="time"><view><text class="level">{{item.level}}</text> <text>{{item.tag}}</text></view><view>{{item.message}}</view><view class="muted">{{item.time}}</view></view></view>
+<view class="page">
+  <view class="hero log-hero">
+    <view class="eyebrow">SYSTEM TELEMETRY</view>
+    <view class="hero-title">运行日志</view>
+    <view class="hero-sub">最近 500 条设备与传输事件</view>
+  </view>
+  <view class="row toolbar"><view><view class="panel-title">事件流</view><view class="muted">{{logs.length}} 条记录</view></view><button class="clear-btn" size="mini" bindtap="clear">清空</button></view>
+  <view class="empty-log" wx:if="{{!logs.length}}">暂无运行记录</view>
+  <view class="log-entry" wx:for="{{logs}}" wx:key="time">
+    <view class="timeline-dot {{item.level}}"></view>
+    <view class="log-body"><view class="row"><view><text class="level">{{item.level}}</text><text class="tag">{{item.tag}}</text></view><text class="time">{{item.time}}</text></view><view class="message">{{item.message}}</view></view>
+  </view>
+</view>

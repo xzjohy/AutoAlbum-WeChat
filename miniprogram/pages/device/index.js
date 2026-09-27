@@ -1,77 +1,112 @@
-const ble=require('../../services/ble');
-const control=require('../../services/control');
-const log=require('../../utils/logger');
+const ble = require('../../services/ble');
+const protocol = require('../../services/protocol');
+const modeState = require('../../services/mode');
 
-const STAGE_TEXT={
-  idle:'搜索附近墨水屏',
-  'stopping-scan':'正在停止扫描…',
-  connecting:'正在建立蓝牙连接…',
-  initializing:'蓝牙已连接，正在初始化通信…',
-  ready:'设备已就绪'
-};
+function displayName(device) {
+  return device.localName || device.name || '未命名设备';
+}
 
 Page({
-  data:{devices:[],scanning:false,connecting:false,resetting:false,connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle},
-  onShow(){
-    const connected=ble.isConnected(),ready=ble.isReady();
-    this.setData({connected,ready,deviceId:ble.getDeviceId(),connectionStage:ready?'ready':'idle',connectionText:ready?STAGE_TEXT.ready:STAGE_TEXT.idle});
+  data: {
+    devices: [],
+    scanning: false,
+    connecting: false,
+    connected: false,
+    deviceId: '',
+    screenStatus: '',
+    firmwareVersion: ''
   },
-  async scan(){
-    if(this.data.connecting)return;
-    this.setData({devices:[],scanning:true,connectionStage:'idle',connectionText:'正在扫描附近设备…'});
-    try{
-      await ble.scan(d=>{
-        if(!this.data.devices.some(x=>x.deviceId===d.deviceId))this.setData({devices:this.data.devices.concat(d)});
-      });
-    }catch(e){
-      wx.showModal({title:'蓝牙错误',content:e.errMsg||String(e),showCancel:false});
-      this.setData({scanning:false,connectionText:STAGE_TEXT.idle});
-    }
-  },
-  async connect(e){
-    if(this.data.connecting)return;
-    const id=e.currentTarget.dataset.id;
-    this.setData({connecting:true,scanning:false,connectionStage:'connecting',connectionText:STAGE_TEXT.connecting});
-    try{
-      await ble.connect(id,stage=>this.setData({
-        connectionStage:stage,
-        connectionText:STAGE_TEXT[stage]||stage,
-        connected:stage==='initializing'||stage==='ready',
-        ready:stage==='ready',
-        deviceId:stage==='initializing'||stage==='ready'?id:''
-      }));
-      this.setData({connecting:false,connected:true,ready:true,deviceId:ble.getDeviceId(),connectionStage:'ready',connectionText:STAGE_TEXT.ready});
-    }catch(err){
-      this.setData({connecting:false,connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle});
-      wx.showModal({title:'连接失败',content:err.errMsg||err.message||String(err),showCancel:false});
-    }
-  },
-  resetScreen(){
-    if(!this.data.ready||this.data.resetting)return;
-    wx.showModal({
-      title:'重置屏幕？',
-      content:'仅恢复 SSD1683 和屏幕状态机，不会删除离线图片、轮播设置，也不会清除当前墨水屏画面。',
-      confirmText:'重置屏幕',
-      success:async r=>{
-        if(!r.confirm)return;
-        this.setData({resetting:true,connectionText:'正在恢复屏幕控制器…'});
-        try{
-          await control.resetScreen();
-          log.info('EPD','force reset completed');
-          this.setData({connectionText:'屏幕已复位，设备已就绪'});
-          wx.showToast({title:'屏幕已复位'});
-        }catch(err){
-          const msg=err.message||err.errMsg||String(err);
-          log.error('EPD','force reset failed: '+msg);
-          this.setData({connectionText:'屏幕复位失败'});
-          wx.showModal({title:'复位失败',content:msg,showCancel:false});
-        }finally{this.setData({resetting:false})}
-      }
+
+  onLoad() {
+    this.removeDisconnectListener = ble.onDisconnect(() => {
+      modeState.set('off');
+      this.setData({ connected: false, deviceId: '', connecting: false, screenStatus: '连接已断开', firmwareVersion: '' });
     });
   },
-  async disconnect(){
-    if(this.data.connecting)return;
-    try{await ble.disconnect()}
-    finally{this.setData({connected:false,ready:false,deviceId:'',connectionStage:'idle',connectionText:STAGE_TEXT.idle})}
+
+  onShow() {
+    const status = protocol.getStatus();
+    this.setData({
+      connected: ble.isConnected(),
+      deviceId: ble.getDeviceId(),
+      firmwareVersion: status && status.firmwareVersion || ''
+    });
+  },
+
+  onHide() {
+    ble.stopScan();
+    this.setData({ scanning: false });
+  },
+
+  onUnload() {
+    if (this.removeDisconnectListener) this.removeDisconnectListener();
+    protocol.close();
+    ble.release().catch(() => {});
+  },
+
+  async scan() {
+    this.setData({ devices: [], scanning: true, screenStatus: '' });
+    try {
+      await ble.scan(device => {
+        if (!device.deviceId) return;
+        const devices = this.data.devices.slice();
+        const index = devices.findIndex(item => item.deviceId === device.deviceId);
+        const merged = index >= 0 ? Object.assign({}, devices[index], device) : device;
+        merged.displayName = displayName(merged);
+        merged.isScreen = ble.isLikelyScreen(merged);
+        if (index >= 0) devices[index] = merged;
+        else devices.push(merged);
+        devices.sort((a, b) => Number(b.isScreen) - Number(a.isScreen) || (b.RSSI || -999) - (a.RSSI || -999));
+        this.setData({ devices });
+      });
+    } catch (error) {
+      wx.showModal({ title: '蓝牙错误', content: error.errMsg || error.message || String(error), showCancel: false });
+      this.setData({ scanning: false });
+    }
+  },
+
+  async connect(event) {
+    if (this.data.connecting) return;
+    const id = event.currentTarget.dataset.id;
+    this.setData({ connecting: true, screenStatus: '正在连接并核对固件…' });
+    try {
+      await ble.connect(id);
+      const initialStatus = await protocol.start(status => {
+        const labels = ['设备空闲', '已接收指令', '正在准备屏幕', '正在清屏', '正在刷新', '处理完成', '处理失败', '指令未执行'];
+        this.setData({
+          screenStatus: labels[status.state] || '设备状态 ' + status.state,
+          firmwareVersion: status.firmwareVersion || ''
+        });
+      });
+      modeState.set('off');
+      const previousVersion = wx.getStorageSync('autoalbum_ota_previous_version');
+      let screenStatus = '配套固件已确认，可以同步图片';
+      if (previousVersion && initialStatus.firmwareVersion) {
+        screenStatus = previousVersion === initialStatus.firmwareVersion
+          ? `设备仍运行 ${previousVersion}；OTA 后请等待重启并重新烧录确认`
+          : `固件已切换：${previousVersion} → ${initialStatus.firmwareVersion}`;
+        wx.removeStorageSync('autoalbum_ota_previous_version');
+      }
+      this.setData({
+        connected: true,
+        deviceId: id,
+        scanning: false,
+        firmwareVersion: initialStatus.firmwareVersion || '',
+        screenStatus
+      });
+    } catch (error) {
+      await ble.disconnect().catch(() => {});
+      wx.showModal({ title: '连接失败', content: error.errMsg || error.message || String(error), showCancel: false });
+      this.setData({ connected: false, deviceId: '', screenStatus: '', firmwareVersion: '' });
+    } finally {
+      this.setData({ connecting: false });
+    }
+  },
+
+  async disconnect() {
+    protocol.close();
+    await ble.release();
+    modeState.set('off');
+    this.setData({ connected: false, deviceId: '', screenStatus: '', firmwareVersion: '' });
   }
 });

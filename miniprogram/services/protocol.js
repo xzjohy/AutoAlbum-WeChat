@@ -1,83 +1,161 @@
-const ble=require('./ble');
-const log=require('../utils/logger');
+const ble = require('./ble');
+const log = require('../utils/logger');
 
-let token=1;
-let waiter=null;
-ble.setNotifyHandler(handleNotify);
+const reasons = [
+  '', '设备正忙，指令未执行', '指令或图片数据无效',
+  '屏幕初始化失败，请检查屏幕型号、供电和接线',
+  '屏幕 BUSY 超时', '图片解码失败', '图片上传超时',
+  '未检测到屏幕 BUSY，请检查接线', '图片图层校验失败', 'Flash 保存或回读校验失败，请重新上传'
+];
 
-function bytes(values){return new Uint8Array(values).buffer}
-function nextToken(){token=(token%0xffff)+1;return token}
-function crc16(data){
-  let crc=0xffff;
-  for(let i=0;i<data.length;i++){
-    crc^=data[i]<<8;
-    for(let b=0;b<8;b++)crc=(crc&0x8000)?((crc<<1)^0x1021):(crc<<1);
-    crc&=0xffff;
-  }
-  return crc;
+let sequence = 1 + Math.floor(Math.random() * 60000);
+let ready = false;
+let busy = false;
+let hello = null;
+let pending = null;
+let removeValueListener = null;
+let removeDisconnectListener = null;
+let pollTimer = null;
+let statusListener = null;
+const statusListeners = [];
+let lastStatus = null;
+let lastStatusSignature = '';
+
+function errorReason(code) {
+  return reasons[code] || '设备返回未知错误 ' + code;
 }
-function handleNotify(data){
-  if(data.length===12&&data[0]===0xe5&&data[1]===1){
-    const t=data[2]|(data[3]<<8),state=data[4],reason=data[5];
-    log.info('BLE',`status token=${t} state=${state} reason=${reason}`);
-    if(waiter&&waiter.token===t&&(state===5||state===6||state===7)){
-      const w=waiter;waiter=null;clearTimeout(w.timer);
-      if(state===7)w.reject(new Error(`设备命令失败 reason=0x${reason.toString(16)}`));
-      else w.resolve({state,reason});
-    }
-  }else if(data.length===2){
-    log.info('BLE',`ack length=${(data[0]<<8)|data[1]}`);
+
+function clearState(message) {
+  clearInterval(pollTimer);
+  pollTimer = null;
+  ready = false;
+  busy = false;
+  lastStatus = null;
+  lastStatusSignature = '';
+  if (hello) {
+    clearTimeout(hello.timer);
+    hello.reject(new Error(message));
+    hello = null;
+  }
+  if (pending) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error(message));
+    pending = null;
   }
 }
-function waitStatus(t,timeout=10000){
-  if(waiter)throw new Error('已有控制命令等待设备响应');
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{if(waiter&&waiter.token===t)waiter=null;reject(new Error('等待设备状态超时'))},timeout);
-    waiter={token:t,resolve,reject,timer};
+
+function receive(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] !== 1) return;
+  const status = {
+    token: bytes[2] | bytes[3] << 8,
+    state: bytes[4],
+    reason: bytes[5],
+    scene: bytes[6],
+    busy: bytes[7],
+    seconds: bytes[8] | bytes[9] << 8,
+    command: bytes[10],
+    channel: bytes[11],
+    carouselRunning: bytes.length >= 15 ? !!bytes[12] : false,
+    carouselEnabled: bytes.length >= 15 && (!!bytes[12] || (bytes.length >= 16 && !!bytes[15])),
+    carouselIndex: bytes.length >= 15 ? bytes[13] : 0,
+    carouselCount: bytes.length >= 15 ? bytes[14] : 0,
+    carouselPaused: bytes.length >= 16 ? !!bytes[15] : false,
+    firmwareVersion: bytes.length >= 19 ? `${bytes[16]}.${bytes[17]}.${bytes[18]}` : ''
+  };
+  const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
+  if (!lastStatusSignature) {
+    log.info('EPD', `E5 状态包 ${signature}`);
+    lastStatusSignature = signature;
+  }
+  lastStatus = status;
+  busy = (status.state >= 1 && status.state <= 4) || !!status.busy;
+  if (statusListener) statusListener(status);
+  statusListeners.slice().forEach(listener => listener(status));
+  if (hello) {
+    const current = hello;
+    hello = null;
+    clearTimeout(current.timer);
+    ready = true;
+    sequence = (status.token + 1) % 65535 || 1;
+    current.resolve(status);
+  }
+  if (pending && status.token === pending.token && status.state >= 5) {
+    const current = pending;
+    pending = null;
+    clearTimeout(current.timer);
+    if (status.state === 5) current.resolve(status);
+    else current.reject(new Error(errorReason(status.reason)));
+  }
+}
+
+async function start(listener) {
+  statusListener = listener || null;
+  if (removeValueListener) removeValueListener();
+  if (removeDisconnectListener) removeDisconnectListener();
+  removeValueListener = ble.onValue(receive);
+  removeDisconnectListener = ble.onDisconnect(() => clearState('蓝牙连接已断开'));
+  const response = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      hello = null;
+      reject(new Error('未收到设备状态回复，请确认已烧录配套固件'));
+    }, 5000);
+    hello = { resolve, reject, timer };
+  });
+  let status;
+  try {
+    const result = await Promise.all([ble.write(new Uint8Array([5])), response]);
+    status = result[1];
+  } catch (error) {
+    clearState(error.message || String(error));
+    throw error;
+  }
+  pollTimer = setInterval(() => {
+    if (pending || busy || (lastStatus && lastStatus.carouselRunning)) ble.write(new Uint8Array([5])).catch(() => {});
+  }, 2000);
+  log.info('EPD', 'status protocol ready');
+  return status;
+}
+
+function command(channel, value) {
+  const body = value instanceof Uint8Array ? value : new Uint8Array(value);
+  if (!ready) return Promise.reject(new Error('设备状态服务未就绪，请重新连接'));
+  if (pending || busy) return Promise.reject(new Error('墨水屏仍在处理上一条指令'));
+  if (!body.length || body.length > 243) return Promise.reject(new Error('指令长度超限'));
+  const token = sequence;
+  sequence = token % 65535 + 1;
+  const packet = new Uint8Array(body.length + 4);
+  packet.set([6, token & 255, token >> 8, channel]);
+  packet.set(body, 4);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (!pending || pending.token !== token) return;
+      pending = null;
+      reject(new Error('等待设备执行结果超时，结果未知，请重新连接'));
+    }, 140000);
+    pending = { token, resolve, reject, timer };
+    ble.write(packet).catch(error => {
+      if (!pending || pending.token !== token) return;
+      pending = null;
+      clearTimeout(timer);
+      reject(error);
+    });
   });
 }
-async function command(cmd,args=[],timeout=10000){
-  const t=nextToken();
-  const packet=new Uint8Array(5+args.length);
-  packet[0]=0x06;packet[1]=t&255;packet[2]=t>>8;packet[3]=0;packet[4]=cmd;packet.set(args,5);
-  const done=waitStatus(t,timeout);
-  try{await ble.write(packet.buffer)}catch(e){if(waiter&&waiter.token===t){clearTimeout(waiter.timer);waiter=null}throw e}
-  return done;
-}
-async function emergencyReset(){
-  const t=nextToken();
-  if(waiter){
-    const old=waiter;waiter=null;clearTimeout(old.timer);
-    old.reject(new Error('当前指令已被屏幕复位中止'));
-  }
-  const packet=new Uint8Array([0x06,t&255,t>>8,0,0x0c]);
-  const done=waitStatus(t,5000);
-  try{await ble.write(packet.buffer)}
-  catch(e){if(waiter&&waiter.token===t){clearTimeout(waiter.timer);waiter=null}throw e}
-  return done;
-}
-async function begin(){
-  await ble.write(bytes([0x00,0x00]));
-}
-async function sendPlane(plane,data,onProgress){
-  const maxPayload=176;
-  for(let off=0;off<data.length;off+=maxPayload){
-    const n=Math.min(maxPayload,data.length-off);
-    const packet=new Uint8Array(4+n);
-    packet[0]=0x03;packet[1]=plane;packet[2]=(off>>8)&255;packet[3]=off&255;
-    packet.set(data.subarray(off,off+n),4);
-    await ble.write(packet.buffer);
-    if(onProgress)onProgress((off+n)/data.length);
-  }
-}
-async function uploadFramebuffer(black,red,onProgress){
-  if(black.length!==15000||red.length!==15000)throw new Error('framebuffer 必须为 BLACK/RED 各 15000 bytes');
-  await begin();
-  await sendPlane(0xff,black,p=>onProgress&&onProgress(p*0.5));
-  await sendPlane(0x00,red,p=>onProgress&&onProgress(0.5+p*0.5));
-  const bc=crc16(black),rc=crc16(red);
-  await command(0x08,[bc>>8,bc&255,rc>>8,rc&255],15000);
-  if(onProgress)onProgress(1);
-  return {blackCrc:bc,redCrc:rc};
-}
-module.exports={crc16,command,emergencyReset,uploadFramebuffer};
+
+module.exports = {
+  start,
+  command,
+  close: () => clearState('连接已关闭'),
+  abort: (reason = '操作已取消') => clearState(reason),
+  isReady: () => ready,
+  getStatus: () => lastStatus,
+  onStatus: listener => {
+    if (!statusListeners.includes(listener)) statusListeners.push(listener);
+    return () => {
+      const index = statusListeners.indexOf(listener);
+      if (index >= 0) statusListeners.splice(index, 1);
+    };
+  },
+  reason: errorReason
+};

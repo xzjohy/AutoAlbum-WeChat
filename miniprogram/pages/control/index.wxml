@@ -1,0 +1,52 @@
+<view class="page">
+  <view class="hero">
+    <view class="eyebrow">DISPLAY COMMAND CENTER</view>
+    <view class="hero-title">屏幕控制</view>
+    <view class="hero-sub">模式、时间与刷新操作</view>
+    <view class="connection {{connected ? 'online' : ''}}"><view class="dot"></view>{{connected ? '设备在线' : '设备未连接'}}</view>
+  </view>
+
+  <view class="panel">
+    <view class="clock-mode-row"><view><view class="panel-title">时钟模式</view><view class="muted">开启时自动同步当前时间；与图片模式不能同时开启</view></view><switch color="#927cff" checked="{{clockModeActive}}" disabled="{{!connected || busy}}" bindchange="toggleClockMode"/></view>
+  </view>
+
+  <view class="panel clock-preview-panel">
+    <view class="row"><view><view class="panel-title">时钟样式预览</view><view class="muted">选择后开启时钟模式即可发送到墨水屏</view></view><view class="face-tag">{{clockFace === 'digital' ? '数码' : '指针'}}</view></view>
+    <view class="face-switch"><button class="{{clockFace === 'digital' ? 'selected' : ''}}" data-face="digital" bindtap="selectClockFace">数码时钟</button><button class="{{clockFace === 'analog' ? 'selected' : ''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button></view>
+    <canvas type="2d" id="clock-preview" class="clock-preview"></canvas>
+    <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–1440 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
+    <button class="tech-btn ghost" disabled="{{!connected || busy || !clockModeActive}}" bindtap="applyClockSettings">应用样式与间隔</button>
+  </view>
+
+  <view class="panel">
+    <view class="row"><view><view class="panel-title">设置时钟时间</view><view class="muted">支持 HH:mm 或 HH:mm:ss</view></view><button class="now-btn" disabled="{{busy}}" bindtap="useCurrentTime">使用当前</button></view>
+    <view class="time-fields">
+      <view><text>日期</text><input class="tech-input time-input" maxlength="10" value="{{dateText}}" bindinput="inputDate" placeholder="YYYY-MM-DD"/></view>
+      <view><text>时间</text><input class="tech-input time-input" maxlength="8" value="{{timeText}}" bindinput="inputTime" placeholder="HH:mm:ss"/></view>
+    </view>
+    <view class="format-hint">发送前会检查日期是否存在、闰年以及时分秒范围。</view>
+    <button class="tech-btn ghost" disabled="{{!connected || busy || !clockModeActive}}" loading="{{busy}}" bindtap="setDeviceTime">设置到墨水屏</button>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">快捷指令</view>
+    <view class="command-list">
+      <button class="command" disabled="{{!connected || busy || !clockModeActive}}" bindtap="syncTime"><text>同步当前时间</text><text class="arrow">›</text></button>
+      <button class="command" disabled="{{!connected || busy}}" bindtap="clearBlack"><text>清屏 · 全黑</text><text class="arrow">›</text></button>
+      <button class="command" disabled="{{!connected || busy}}" bindtap="clearWhite"><text>清屏 · 全白</text><text class="arrow">›</text></button>
+      <button class="command" disabled="{{!connected || busy}}" bindtap="fullRefresh"><text>全局刷新</text><text class="arrow">›</text></button>
+      <button class="command disabled-command" disabled><text>局部刷新</text><text class="soon">暂未开放</text></button>
+    </view>
+  </view>
+
+  <view class="panel">
+    <view class="panel-title">高级指令</view>
+    <picker mode="selector" range="{{channels}}" value="{{channel}}" bindchange="setChannel">
+      <view class="picker-field">通道：{{channelLabel}} <text>⌄</text></view>
+    </picker>
+    <input class="tech-input" value="{{rawCommand}}" bindinput="setRawCommand" placeholder="十六进制，例如 E102"/>
+    <button class="tech-btn ghost" disabled="{{!connected || busy}}" loading="{{busy}}" bindtap="sendRaw">发送指令</button>
+  </view>
+
+  <view class="status-bar"><view class="pulse"></view>{{status}}</view>
+</view>

@@ -1,22 +1,26 @@
 <view class="page">
-  <view class="card">
-    <view class="row">
-      <view>
-        <view class="title">蓝牙设备</view>
-        <view class="muted">{{connectionText}}</view>
-        <view class="muted" wx:if="{{deviceId}}">{{deviceId}}</view>
-      </view>
-      <view class="badge">{{ready?'已就绪':(connecting?'连接中':(connected?'初始化中':'离线'))}}</view>
-    </view>
-    <button class="btn" wx:if="{{!connected&&!connecting}}" bindtap="scan" disabled="{{scanning}}">{{scanning?'正在扫描…':'扫描设备'}}</button>
-    <button class="btn" wx:if="{{connected&&ready}}" bindtap="resetScreen" disabled="{{resetting}}">{{resetting?'正在重置屏幕…':'重置屏幕'}}</button>
-    <view class="muted" wx:if="{{connected&&ready}}">用于刷新异常、BUSY 卡住或传输中断后的恢复；不会擦除 Flash 图片和设置。</view>
-    <button class="btn" wx:if="{{connected&&ready}}" type="warn" bindtap="disconnect" disabled="{{resetting}}">断开连接</button>
+  <view class="hero device-hero">
+    <view class="eyebrow">BLE LINK</view>
+    <view class="hero-title">设备连接</view>
+    <view class="hero-sub">发现并验证 S24 墨水屏</view>
+    <view class="connection {{connected ? 'online' : ''}}"><view class="dot"></view>{{connected ? '链路已建立' : '等待连接'}}</view>
   </view>
-  <view class="card" wx:if="{{!connected}}">
-    <view wx:for="{{devices}}" wx:key="deviceId" class="device row" bindtap="connect" data-id="{{item.deviceId}}">
-      <view><view>{{item.name||item.localName||'未命名设备'}}</view><view class="muted">{{item.deviceId}}</view></view>
-      <text>{{connecting?'请稍候':item.RSSI+' dBm'}}</text>
+  <view class="panel">
+    <view class="row">
+      <view><view class="panel-title">{{connected ? 'S24 墨水屏' : '附近设备'}}</view><view class="muted">{{connected ? deviceId : '请在手机微信中搜索'}}</view><view class="firmware-version" wx:if="{{connected}}">固件版本：{{firmwareVersion || '旧固件未提供'}}</view></view>
+      <view class="signal {{connected ? 'active' : ''}}"><view></view><view></view><view></view></view>
+    </view>
+    <view class="status" wx:if="{{screenStatus}}">{{screenStatus}}</view>
+    <button class="tech-btn" wx:if="{{!connected}}" disabled="{{connecting}}" bindtap="scan">{{scanning ? '重新扫描' : '扫描 BLE 设备'}}</button>
+    <button class="tech-btn disconnect" wx:else bindtap="disconnect">断开连接</button>
+  </view>
+  <view class="panel" wx:if="{{!connected}}">
+    <view class="scan-line" wx:if="{{scanning}}"></view>
+    <view class="hint" wx:if="{{scanning && !devices.length}}">正在监听蓝牙广播，请让墨水屏靠近手机。</view>
+    <view wx:for="{{devices}}" wx:key="deviceId" class="device {{item.isScreen ? 'screen' : ''}}" bindtap="connect" data-id="{{item.deviceId}}">
+      <view class="device-icon">{{item.isScreen ? 'EP' : 'BT'}}</view>
+      <view class="device-main"><view class="device-name">{{item.displayName}}<text class="screen-tag" wx:if="{{item.isScreen}}">匹配</text></view><view class="muted device-id">{{item.deviceId}}</view></view>
+      <view class="rssi">{{item.RSSI}}<text>dBm</text></view>
     </view>
   </view>
 </view>
