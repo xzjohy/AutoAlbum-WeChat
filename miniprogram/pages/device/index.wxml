@@ -13,6 +13,20 @@
     <view class="muted" wx:if="{{connected&&ready}}">用于刷新异常、BUSY 卡住或传输中断后的恢复；不会擦除 Flash 图片和设置。</view>
     <button class="btn" wx:if="{{connected&&ready}}" type="warn" bindtap="disconnect" disabled="{{resetting}}">断开连接</button>
   </view>
+  <view class="card" wx:if="{{connected&&ready}}">
+    <view class="title">时钟模式</view>
+    <view class="clock-choice">
+      <button class="{{clockFace==='digital'?'clock-active':''}}" data-face="digital" bindtap="selectClockFace">数字时钟</button>
+      <button class="{{clockFace==='analog'?'clock-active':''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button>
+    </view>
+    <view class="muted">界面文字使用英文；星期显示 MON–SUN。</view>
+    <view class="clock-interval">
+      <text>更新时间（分钟）</text>
+      <input type="number" value="{{clockInterval}}" bindinput="clockIntervalInput" />
+    </view>
+    <view class="muted">范围 1–1440 分钟；断开小程序后设备仍按此周期更新。</view>
+    <button class="btn" bindtap="saveClockSettings" disabled="{{savingClock}}">{{savingClock?'正在同步…':'同步时钟设置'}}</button>
+  </view>
   <view class="card" wx:if="{{!connected}}">
     <view wx:for="{{devices}}" wx:key="deviceId" class="device row" bindtap="connect" data-id="{{item.deviceId}}">
       <view><view>{{item.name||item.localName||'未命名设备'}}</view><view class="muted">{{item.deviceId}}</view></view>
