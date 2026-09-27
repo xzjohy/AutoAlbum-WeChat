@@ -19,6 +19,6 @@ async function setCarousel(enabled,interval){
 }
 async function resetScreen(){
   log.info('EPD','force reset requested');
-  return protocol.command(0x0c,[],5000);
+  return protocol.emergencyReset();
 }
 module.exports={saveSlot,deleteSlot,setCarousel,resetScreen};
