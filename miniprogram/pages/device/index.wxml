@@ -9,7 +9,9 @@
       <view class="badge">{{ready?'已就绪':(connecting?'连接中':(connected?'初始化中':'离线'))}}</view>
     </view>
     <button class="btn" wx:if="{{!connected&&!connecting}}" bindtap="scan" disabled="{{scanning}}">{{scanning?'正在扫描…':'扫描设备'}}</button>
-    <button class="btn" wx:if="{{connected&&ready}}" type="warn" bindtap="disconnect">断开连接</button>
+    <button class="btn" wx:if="{{connected&&ready}}" bindtap="resetScreen" disabled="{{resetting}}">{{resetting?'正在重置屏幕…':'重置屏幕'}}</button>
+    <view class="muted" wx:if="{{connected&&ready}}">用于刷新异常、BUSY 卡住或传输中断后的恢复；不会擦除 Flash 图片和设置。</view>
+    <button class="btn" wx:if="{{connected&&ready}}" type="warn" bindtap="disconnect" disabled="{{resetting}}">断开连接</button>
   </view>
   <view class="card" wx:if="{{!connected}}">
     <view wx:for="{{devices}}" wx:key="deviceId" class="device row" bindtap="connect" data-id="{{item.deviceId}}">
