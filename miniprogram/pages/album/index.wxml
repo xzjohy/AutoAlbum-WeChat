@@ -1,1 +1,44 @@
-<view class="page"><view class="card"><view class="row"><view><view class="title">自动相册</view><view class="muted">BW · BWR · BWY 墨水屏</view></view><view class="badge">{{connected?'已连接':'未连接'}}</view></view></view><view class="card"><view class="row"><text>我的相册</text><text class="muted">{{images.length}} 张</text></view><view class="grid"><view class="photo" wx:for="{{images}}" wx:key="path"><image src="{{item.path}}" mode="aspectFill"/><text>{{index+1}}</text></view></view><button class="btn" bindtap="chooseImages">＋ 添加图片</button><button class="btn" type="primary" disabled="{{!images.length||syncing}}" bindtap="sync">{{syncing?'同步中 '+progress+'%':'同步到墨水屏'}}</button><button class="btn" wx:if="{{images.length}}" bindtap="clear">清空相册</button></view><view class="card"><view>API 图片</view><view class="muted">API 下载/批量导入接口已预留，下一阶段接入你的图片 API。</view></view></view>
+<view class="page">
+  <view class="card">
+    <view class="row">
+      <view><view class="title">设备相册</view><view class="muted">400×300 · BLACK + RED · Flash 4 槽</view></view>
+      <view class="badge">{{connected?'已连接':'未连接'}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="slot" wx:for="{{slots}}" wx:key="slot">
+      <view class="slot-head"><text class="slot-title">Slot {{index+1}}</text><text class="muted">设备索引 {{index}}</text></view>
+      <view class="slot-body">
+        <image wx:if="{{item.path}}" class="preview" src="{{item.path}}" mode="aspectFit"/>
+        <view wx:else class="preview empty">未选择图片</view>
+        <view class="slot-actions">
+          <button size="mini" data-slot="{{index}}" bindtap="chooseSlot" disabled="{{syncing}}">{{item.path?'替换':'选择图片'}}</button>
+          <button size="mini" data-slot="{{index}}" bindtap="deleteSlot" disabled="{{syncing||!item.path}}">删除</button>
+          <text class="status">{{item.status}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row"><text>自动轮播</text><switch checked="{{carouselEnabled}}" bindchange="onCarouselChange" disabled="{{syncing}}"/></view>
+    <view class="interval-row">
+      <text>轮播间隔（分钟）</text>
+      <input type="number" value="{{carouselInterval}}" bindinput="onIntervalInput" bindblur="onIntervalBlur" disabled="{{syncing}}"/>
+    </view>
+    <view class="muted">范围 1～1440 分钟。设置写入设备 Flash，手机断开后设备仍会自行轮播。</view>
+    <button class="btn" bindtap="applyCarousel" disabled="{{!connected||syncing}}">保存轮播设置</button>
+  </view>
+
+  <view class="card">
+    <button class="btn" type="primary" bindtap="sync" disabled="{{!connected||syncing}}">
+      {{syncing?'正在同步':'一键同步到设备'}}
+    </button>
+    <view wx:if="{{syncing||stage}}" class="sync-box">
+      <view class="row"><text>{{stage}}</text><text wx:if="{{currentTotal}}">{{currentIndex}}/{{currentTotal}}</text></view>
+      <progress percent="{{progress}}" show-info stroke-width="6"/>
+      <view class="muted">BLE 上传 {{progress}}% · CRC 通过后才写入对应 Flash Slot</view>
+    </view>
+  </view>
+</view>
