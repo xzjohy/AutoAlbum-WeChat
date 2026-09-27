@@ -1,1 +1,49 @@
-const cfg=require('../config/ble');const log=require('../utils/logger');let deviceId='';function p(fn,args={}){return new Promise((resolve,reject)=>fn({...args,success:resolve,fail:reject}))}async function open(){await p(wx.openBluetoothAdapter);log.info('BLE','adapter opened')}async function scan(cb){await open();wx.onBluetoothDeviceFound(r=>{(r.devices||[]).forEach(cb)});await p(wx.startBluetoothDevicesDiscovery,{allowDuplicatesKey:false});log.info('BLE','scan started')}async function stopScan(){try{await p(wx.stopBluetoothDevicesDiscovery)}catch(e){}}async function connect(id){await stopScan();await p(wx.createBLEConnection,{deviceId:id});deviceId=id;log.info('BLE','connected '+id);try{await p(wx.notifyBLECharacteristicValueChange,{deviceId,serviceId:cfg.serviceUUID,characteristicId:cfg.notifyUUID,state:true})}catch(e){log.warn('BLE','notify unavailable '+e.errMsg)}}async function disconnect(){if(!deviceId)return;await p(wx.closeBLEConnection,{deviceId});log.info('BLE','disconnected '+deviceId);deviceId=''}async function write(buffer){if(!deviceId)throw new Error('BLE device not connected');return p(wx.writeBLECharacteristicValue,{deviceId,serviceId:cfg.serviceUUID,characteristicId:cfg.writeUUID,value:buffer,writeType:cfg.writeType})}async function writeChunked(buffer,onProgress){const size=cfg.packetSize;for(let off=0;off<buffer.byteLength;off+=size){await write(buffer.slice(off,Math.min(off+size,buffer.byteLength)));onProgress&&onProgress(Math.min(1,(off+size)/buffer.byteLength))}}module.exports={scan,stopScan,connect,disconnect,write,writeChunked,isConnected:()=>!!deviceId,getDeviceId:()=>deviceId};
+const cfg=require('../config/ble');
+const log=require('../utils/logger');
+let deviceId='';
+let notifyHandler=null;
+
+function p(fn,args={}){return new Promise((resolve,reject)=>fn({...args,success:resolve,fail:reject}))}
+async function open(){
+  try{await p(wx.openBluetoothAdapter)}
+  catch(e){if(!(e&&e.errCode===10001))throw e}
+  log.info('BLE','adapter opened');
+}
+async function scan(cb){
+  await open();
+  wx.onBluetoothDeviceFound(r=>(r.devices||[]).forEach(cb));
+  await p(wx.startBluetoothDevicesDiscovery,{allowDuplicatesKey:false});
+  log.info('BLE','scan started');
+}
+async function stopScan(){try{await p(wx.stopBluetoothDevicesDiscovery)}catch(e){}}
+async function connect(id){
+  await stopScan();
+  await open();
+  await p(wx.createBLEConnection,{deviceId:id});
+  deviceId=id;
+  wx.onBLECharacteristicValueChange(r=>{
+    if(r.deviceId===deviceId&&r.characteristicId.toUpperCase()===cfg.notifyUUID.toUpperCase()&&notifyHandler)
+      notifyHandler(new Uint8Array(r.value));
+  });
+  await p(wx.notifyBLECharacteristicValueChange,{
+    deviceId,serviceId:cfg.serviceUUID,characteristicId:cfg.notifyUUID,state:true
+  });
+  log.info('BLE','connected '+id);
+}
+async function disconnect(){
+  if(!deviceId)return;
+  const id=deviceId;
+  deviceId='';
+  notifyHandler=null;
+  await p(wx.closeBLEConnection,{deviceId:id});
+  log.info('BLE','disconnected '+id);
+}
+async function write(buffer){
+  if(!deviceId)throw new Error('BLE device not connected');
+  return p(wx.writeBLECharacteristicValue,{
+    deviceId,serviceId:cfg.serviceUUID,characteristicId:cfg.writeUUID,
+    value:buffer,writeType:cfg.writeType
+  });
+}
+function setNotifyHandler(fn){notifyHandler=fn}
+module.exports={scan,stopScan,connect,disconnect,write,setNotifyHandler,isConnected:()=>!!deviceId,getDeviceId:()=>deviceId};
