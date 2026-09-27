@@ -1,1 +1,30 @@
-const ble=require('./ble');const log=require('../utils/logger');async function uploadFile(path,index,total,onProgress){const fs=wx.getFileSystemManager();const data=fs.readFileSync(path);log.info('SYNC',`start ${index+1}/${total} ${data.byteLength} bytes`);await ble.writeChunked(data,p=>onProgress&&onProgress({index,total,fileProgress:p,overall:(index+p)/total}));log.info('SYNC',`done ${index+1}/${total}`)}async function start(items,onProgress){if(!ble.isConnected())throw new Error('请先连接蓝牙设备');for(let i=0;i<items.length;i++)await uploadFile(items[i].path,i,items.length,onProgress)}module.exports={start};
+const ble=require('./ble');
+const protocol=require('./protocol');
+const control=require('./control');
+const image=require('../utils/image');
+const log=require('../utils/logger');
+
+async function start(slots,onProgress){
+  if(!ble.isConnected())throw new Error('请先连接蓝牙设备');
+  const selected=slots.filter(x=>x&&x.path);
+  if(!selected.length)throw new Error('请至少选择一张图片');
+  for(let i=0;i<selected.length;i++){
+    const item=selected[i];
+    const slot=item.slot;
+    onProgress&&onProgress({index:i,total:selected.length,slot,stage:'convert',fileProgress:0});
+    log.info('SYNC',`Slot ${slot}: convert 400x300 BWR`);
+    const fb=await image.toFramebuffer(item.path);
+    onProgress&&onProgress({index:i,total:selected.length,slot,stage:'upload',fileProgress:0});
+    await protocol.uploadFramebuffer(fb.black,fb.red,p=>onProgress&&onProgress({
+      index:i,total:selected.length,slot,stage:'upload',fileProgress:p
+    }));
+    onProgress&&onProgress({index:i,total:selected.length,slot,stage:'crc-ok',fileProgress:1});
+    log.info('SYNC',`Slot ${slot}: CRC verified`);
+    onProgress&&onProgress({index:i,total:selected.length,slot,stage:'saving',fileProgress:1});
+    await control.saveSlot(slot);
+    onProgress&&onProgress({index:i,total:selected.length,slot,stage:'saved',fileProgress:1});
+    log.info('SYNC',`Slot ${slot}: saved`);
+  }
+  return selected.length;
+}
+module.exports={start};
