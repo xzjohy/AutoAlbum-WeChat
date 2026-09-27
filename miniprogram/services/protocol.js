@@ -44,6 +44,18 @@ async function command(cmd,args=[],timeout=10000){
   try{await ble.write(packet.buffer)}catch(e){if(waiter&&waiter.token===t){clearTimeout(waiter.timer);waiter=null}throw e}
   return done;
 }
+async function emergencyReset(){
+  const t=nextToken();
+  if(waiter){
+    const old=waiter;waiter=null;clearTimeout(old.timer);
+    old.reject(new Error('当前指令已被屏幕复位中止'));
+  }
+  const packet=new Uint8Array([0x06,t&255,t>>8,0,0x0c]);
+  const done=waitStatus(t,5000);
+  try{await ble.write(packet.buffer)}
+  catch(e){if(waiter&&waiter.token===t){clearTimeout(waiter.timer);waiter=null}throw e}
+  return done;
+}
 async function begin(){
   await ble.write(bytes([0x00,0x00]));
 }
@@ -68,4 +80,4 @@ async function uploadFramebuffer(black,red,onProgress){
   if(onProgress)onProgress(1);
   return {blackCrc:bc,redCrc:rc};
 }
-module.exports={crc16,command,uploadFramebuffer};
+module.exports={crc16,command,emergencyReset,uploadFramebuffer};
