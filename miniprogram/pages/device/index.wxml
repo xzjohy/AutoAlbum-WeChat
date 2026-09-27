@@ -1,1 +1,20 @@
-<view class="page"><view class="card"><view class="row"><view><view class="title">蓝牙设备</view><view class="muted">{{connected?'已连接 '+deviceId:'搜索附近墨水屏'}}</view></view><view class="badge">{{connected?'在线':'离线'}}</view></view><button class="btn" wx:if="{{!connected}}" bindtap="scan">{{scanning?'正在扫描…':'扫描设备'}}</button><button class="btn" wx:if="{{connected}}" type="warn" bindtap="disconnect">断开连接</button></view><view class="card" wx:if="{{!connected}}"><view wx:for="{{devices}}" wx:key="deviceId" class="device row" bindtap="connect" data-id="{{item.deviceId}}"><view><view>{{item.name||item.localName||'未命名设备'}}</view><view class="muted">{{item.deviceId}}</view></view><text>{{item.RSSI}} dBm</text></view></view></view>
+<view class="page">
+  <view class="card">
+    <view class="row">
+      <view>
+        <view class="title">蓝牙设备</view>
+        <view class="muted">{{connectionText}}</view>
+        <view class="muted" wx:if="{{deviceId}}">{{deviceId}}</view>
+      </view>
+      <view class="badge">{{ready?'已就绪':(connecting?'连接中':(connected?'初始化中':'离线'))}}</view>
+    </view>
+    <button class="btn" wx:if="{{!connected&&!connecting}}" bindtap="scan" disabled="{{scanning}}">{{scanning?'正在扫描…':'扫描设备'}}</button>
+    <button class="btn" wx:if="{{connected&&ready}}" type="warn" bindtap="disconnect">断开连接</button>
+  </view>
+  <view class="card" wx:if="{{!connected}}">
+    <view wx:for="{{devices}}" wx:key="deviceId" class="device row" bindtap="connect" data-id="{{item.deviceId}}">
+      <view><view>{{item.name||item.localName||'未命名设备'}}</view><view class="muted">{{item.deviceId}}</view></view>
+      <text>{{connecting?'请稍候':item.RSSI+' dBm'}}</text>
+    </view>
+  </view>
+</view>
