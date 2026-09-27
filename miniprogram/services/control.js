@@ -17,4 +17,8 @@ async function setCarousel(enabled,interval){
   log.info('FLASH',`carousel ${enabled?'on':'off'} interval=${minutes}m`);
   return protocol.command(0x0b,[enabled?1:0,minutes&255,(minutes>>8)&255],10000);
 }
-module.exports={saveSlot,deleteSlot,setCarousel};
+async function resetScreen(){
+  log.info('EPD','force reset requested');
+  return protocol.command(0x0c,[],5000);
+}
+module.exports={saveSlot,deleteSlot,setCarousel,resetScreen};
