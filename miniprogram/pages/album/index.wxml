@@ -14,6 +14,7 @@
         <view wx:else class="preview empty">未选择图片</view>
         <view class="slot-actions">
           <button size="mini" data-slot="{{index}}" bindtap="chooseSlot" disabled="{{syncing}}">{{item.path?'替换':'选择图片'}}</button>
+          <button size="mini" data-slot="{{index}}" bindtap="displaySlot" disabled="{{syncing||!item.path||!connected}}">上传显示</button>
           <button size="mini" data-slot="{{index}}" bindtap="deleteSlot" disabled="{{syncing}}">删除</button>
           <text class="status">{{item.status}}</text>
         </view>
