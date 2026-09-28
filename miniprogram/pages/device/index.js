@@ -99,12 +99,16 @@ Page({
       await ble.connect(id);
       const initialStatus = await protocol.start(status => {
         const labels = ['设备空闲', '已接收指令', '正在准备屏幕', '正在清屏', '正在刷新', '处理完成', '处理失败', '指令未执行'];
-        this.setData({
+        const next = {
           screenStatus: labels[status.state] || '设备状态 ' + status.state,
           firmwareVersion: status.firmwareVersion || ''
-        });
+        };
+        if (status.idleDisconnectMinutes != null && status.idleDisconnectMinutes > 0) {
+          next.idleDisconnectDraft = String(status.idleDisconnectMinutes);
+        }
+        this.setData(next);
       });
-      if (initialStatus.idleDisconnectMinutes != null) {
+      if (initialStatus.idleDisconnectMinutes != null && initialStatus.idleDisconnectMinutes > 0) {
         this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
       }
       modeState.set('off');

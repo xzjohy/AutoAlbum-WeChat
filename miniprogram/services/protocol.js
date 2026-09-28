@@ -22,6 +22,7 @@ let lastStatus = null;
 const idleWaiters = [];
 let lastStatusSignature = '';
 const operationListeners = [];
+let commandQueue = Promise.resolve();
 
 function emitOperation(type, detail = {}) {
   const event = Object.assign({ type, at: Date.now() }, detail);
@@ -156,7 +157,12 @@ function command(channel, value) {
   const body = value instanceof Uint8Array ? value : new Uint8Array(value);
   if (!ready) return Promise.reject(new Error('设备状态服务未就绪，请重新连接'));
   if (!body.length || body.length > 243) return Promise.reject(new Error('指令长度超限'));
-  return waitForIdle().then(() => sendCommand(channel, body));
+  const task = commandQueue
+    .catch(() => {})
+    .then(() => waitForIdle())
+    .then(() => sendCommand(channel, body));
+  commandQueue = task;
+  return task;
 }
 
 function sendCommand(channel, body) {

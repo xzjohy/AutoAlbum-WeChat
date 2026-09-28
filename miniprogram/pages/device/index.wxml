@@ -18,7 +18,7 @@
     <view class="panel-title">蓝牙空闲自动断开</view>
     <view class="muted">设备空闲达到设定时间后自动释放连接。</view>
     <view class="policy-row"><text>断开时间</text><view class="interval-input"><input type="number" value="{{idleDisconnectDraft}}" disabled="{{connecting}}" bindinput="inputIdleDisconnect"/><text>分钟</text></view></view>
-    <view class="muted">可设置 0–999 分钟；0 表示保持连接，离开小程序时仍会主动释放蓝牙。</view>
+    <view class="muted">可设置 1–999 分钟；离开小程序时仍会主动释放蓝牙。</view>
     <button class="tech-btn ghost" disabled="{{!connected || connecting}}" loading="{{connecting}}" bindtap="applyIdleDisconnect">应用断开策略</button>
   </view>
   <view class="panel" wx:if="{{!connected}}">
