@@ -249,8 +249,19 @@ Page({
       ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
       for (let i = 0; i < 12; i++) {
         const angle = i * Math.PI / 6 - Math.PI / 2;
-        ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(String(i || 12), x + Math.cos(angle) * radius * 0.78, y + Math.sin(angle) * radius * 0.78 + 5);
+        if (i % 3 === 0) {
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(angle) * radius * 0.85, y + Math.sin(angle) * radius * 0.85, 5, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
+        const outer = radius * 0.94;
+        const inner = radius * 0.79;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner);
+        ctx.lineTo(x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
+        ctx.stroke();
       }
       const hand = (angle, length, lineWidth, color) => {
         ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.beginPath(); ctx.moveTo(x, y);
