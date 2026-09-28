@@ -1,6 +1,8 @@
 const ble = require('../../services/ble');
 const control = require('../../services/control');
 const modeState = require('../../services/mode');
+const onlineClock = require('../../services/online-clock');
+const protocol = require('../../services/protocol');
 
 function pad(value) { return String(value).padStart(2, '0'); }
 
@@ -41,7 +43,33 @@ Page({
     timeText: '',
     clockFace: 'digital',
     refreshIntervalDraft: '5',
-    refreshIntervalMinutes: 5
+    refreshIntervalMinutes: 5,
+    onlineSyncEnabled: false,
+    onlineSyncDraft: '5',
+    onlineSyncMinutes: 5,
+    operationSeconds: 0,
+    operationDetail: '',
+    tempOffsetDraft: '0.0'
+  },
+
+  onLoad() {
+    this.removeOperationListener = protocol.onOperation(event => {
+      if (event.type === 'waiting') {
+        this.setData({ operationDetail: '设备正在完成上一项操作，当前指令已排队等待' });
+      } else if (event.type === 'status' && event.status) {
+        const labels = ['', '已接收', '正在准备屏幕', '正在清屏', '正在刷新'];
+        this.setData({
+          operationSeconds: event.status.seconds || 0,
+          operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : ''
+        });
+      } else if (event.type === 'idle') {
+        this.setData({ operationDetail: '', operationSeconds: 0 });
+      }
+    });
+  },
+
+  onUnload() {
+    if (this.removeOperationListener) this.removeOperationListener();
   },
 
   onReady() {
@@ -50,10 +78,18 @@ Page({
 
   onShow() {
     const fields = this.data.dateText ? {} : currentFields();
+    const online = onlineClock.settings();
     this.setData(Object.assign({
       connected: ble.isConnected(),
-      clockModeActive: modeState.isClock()
+      clockModeActive: modeState.isClock(),
+      onlineSyncEnabled: online.enabled,
+      onlineSyncDraft: String(online.intervalMinutes),
+      onlineSyncMinutes: online.intervalMinutes
     }, fields));
+    const deviceStatus = protocol.getStatus();
+    if (deviceStatus && deviceStatus.tempOffsetTenths != null) {
+      this.setData({ tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1) });
+    }
     this.drawClockPreview();
   },
 
@@ -110,13 +146,50 @@ Page({
     this.setData({ refreshIntervalDraft: event.detail.value });
   },
   normalizeRefreshInterval() {
-    const minutes = Math.max(1, Math.min(1440, parseInt(this.data.refreshIntervalDraft, 10) || 5));
+    const minutes = Math.max(1, Math.min(999, parseInt(this.data.refreshIntervalDraft, 10) || 5));
     this.setData({ refreshIntervalDraft: String(minutes), refreshIntervalMinutes: minutes });
     return minutes;
   },
   applyClockSettings() {
     const minutes = this.normalizeRefreshInterval();
     return this.run('正在更新时钟样式', () => control.setClockFace(this.data.clockFace, minutes));
+  },
+
+  async cancelCurrentOperation() {
+    protocol.cancelWaiting();
+    protocol.close();
+    await ble.release().catch(() => {});
+    this.setData({ busy: false, connected: false, operationDetail: '', status: '已取消等待并断开连接；屏幕会自行完成当前刷新' });
+    wx.showToast({ title: '已安全断开', icon: 'none' });
+  },
+
+  inputTemperatureOffset(event) { this.setData({ tempOffsetDraft: event.detail.value }); },
+  applyTemperatureOffset() {
+    let degrees = Number(this.data.tempOffsetDraft);
+    if (!Number.isFinite(degrees)) degrees = 0;
+    degrees = Math.max(-12, Math.min(12, Math.round(degrees * 10) / 10));
+    this.setData({ tempOffsetDraft: degrees.toFixed(1) });
+    return this.run('正在保存温度校准', () => control.setTemperatureOffset(Math.round(degrees * 10)));
+  },
+  inputOnlineSyncInterval(event) {
+    this.setData({ onlineSyncDraft: event.detail.value });
+  },
+  normalizeOnlineSyncInterval() {
+    const minutes = Math.max(1, Math.min(999, parseInt(this.data.onlineSyncDraft, 10) || 5));
+    this.setData({ onlineSyncDraft: String(minutes), onlineSyncMinutes: minutes });
+    return minutes;
+  },
+  toggleOnlineSync(event) {
+    const enabled = event.detail.value;
+    const intervalMinutes = this.normalizeOnlineSyncInterval();
+    const saved = onlineClock.configure({ enabled, intervalMinutes });
+    this.setData({ onlineSyncEnabled: saved.enabled, onlineSyncDraft: String(saved.intervalMinutes), onlineSyncMinutes: saved.intervalMinutes });
+    wx.showToast({ title: saved.enabled ? '在线校时已开启' : '在线校时已关闭', icon: 'none' });
+  },
+  applyOnlineSync() {
+    const saved = onlineClock.configure({ enabled: this.data.onlineSyncEnabled, intervalMinutes: this.normalizeOnlineSyncInterval() });
+    this.setData({ onlineSyncDraft: String(saved.intervalMinutes), onlineSyncMinutes: saved.intervalMinutes });
+    wx.showToast({ title: `已设为每 ${saved.intervalMinutes} 分钟`, icon: 'none' });
   },
   drawClockPreview() {
     const time = previewTime(this.data.timeText);

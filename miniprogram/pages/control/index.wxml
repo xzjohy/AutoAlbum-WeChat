@@ -14,8 +14,14 @@
     <view class="row"><view><view class="panel-title">时钟样式预览</view><view class="muted">选择后开启时钟模式即可发送到墨水屏</view></view><view class="face-tag">{{clockFace === 'digital' ? '数码' : '指针'}}</view></view>
     <view class="face-switch"><button class="{{clockFace === 'digital' ? 'selected' : ''}}" data-face="digital" bindtap="selectClockFace">数码时钟</button><button class="{{clockFace === 'analog' ? 'selected' : ''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button></view>
     <canvas type="2d" id="clock-preview" class="clock-preview"></canvas>
-    <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–1440 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
+    <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
     <button class="tech-btn ghost" disabled="{{!connected || busy || !clockModeActive}}" bindtap="applyClockSettings">应用样式与间隔</button>
+  </view>
+
+  <view class="panel">
+    <view class="clock-mode-row"><view><view class="panel-title">时钟在线定时更新</view><view class="muted">小程序保持前台并连接设备时，定期同步手机当前时间</view></view><switch color="#927cff" checked="{{onlineSyncEnabled}}" disabled="{{!connected || !clockModeActive || busy}}" bindchange="toggleOnlineSync"/></view>
+    <view class="refresh-setting"><view><view class="setting-title">在线更新时间间隔</view><view class="muted">1–999 分钟；此功能不修改固件</view></view><view class="interval-input"><input type="number" value="{{onlineSyncDraft}}" disabled="{{busy}}" bindinput="inputOnlineSyncInterval" bindblur="normalizeOnlineSyncInterval"/><text>分钟</text></view></view>
+    <button class="tech-btn ghost" disabled="{{!connected || !clockModeActive || busy}}" bindtap="applyOnlineSync">应用在线更新间隔</button>
   </view>
 
   <view class="panel">
@@ -48,5 +54,16 @@
     <button class="tech-btn ghost" disabled="{{!connected || busy}}" loading="{{busy}}" bindtap="sendRaw">发送指令</button>
   </view>
 
+  <view class="panel" wx:if="{{connected}}">
+    <view class="panel-title">温度校准</view>
+    <view class="muted">正数提高显示温度，负数降低；范围 −12.0～+12.0°C</view>
+    <view class="refresh-setting"><view class="setting-title">校准偏移</view><view class="interval-input"><input type="digit" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
+    <button class="tech-btn ghost" disabled="{{busy}}" bindtap="applyTemperatureOffset">保存到设备</button>
+  </view>
+  <view class="panel operation-panel" wx:if="{{operationDetail}}">
+    <view class="row"><view><view class="panel-title">设备操作进行中</view><view class="muted">{{operationDetail}}</view></view><text class="operation-time">{{operationSeconds}}s</text></view>
+    <view class="indeterminate"><view></view></view>
+    <button class="stop-upload" bindtap="cancelCurrentOperation">取消等待并断开</button>
+  </view>
   <view class="status-bar"><view class="pulse"></view>{{status}}</view>
 </view>

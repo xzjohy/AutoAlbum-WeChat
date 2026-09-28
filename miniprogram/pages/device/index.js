@@ -1,6 +1,7 @@
 const ble = require('../../services/ble');
 const protocol = require('../../services/protocol');
 const modeState = require('../../services/mode');
+const connectionPolicy = require('../../services/connection-policy');
 
 function displayName(device) {
   return device.localName || device.name || '未命名设备';
@@ -14,7 +15,8 @@ Page({
     connected: false,
     deviceId: '',
     screenStatus: '',
-    firmwareVersion: ''
+    firmwareVersion: '',
+    idleDisconnectDraft: '1'
   },
 
   onLoad() {
@@ -26,11 +28,35 @@ Page({
 
   onShow() {
     const status = protocol.getStatus();
+    const idleMinutes = connectionPolicy.get();
     this.setData({
       connected: ble.isConnected(),
       deviceId: ble.getDeviceId(),
-      firmwareVersion: status && status.firmwareVersion || ''
+      firmwareVersion: status && status.firmwareVersion || '',
+      idleDisconnectDraft: String(idleMinutes)
     });
+  },
+
+  inputIdleDisconnect(event) { this.setData({ idleDisconnectDraft: event.detail.value }); },
+  async applyIdleDisconnect() {
+    if (!this.data.connected || this.data.connecting) return;
+    const minutes = connectionPolicy.normalize(this.data.idleDisconnectDraft);
+    this.setData({ connecting: true, screenStatus: '正在设置蓝牙空闲断开策略…' });
+    try {
+      const applied = await connectionPolicy.apply(minutes);
+      this.setData({
+        idleDisconnectDraft: String(applied),
+        screenStatus: applied ? `空闲 ${applied} 分钟后自动断开` : '已关闭自动断开'
+      });
+      wx.showToast({ title: '连接策略已应用', icon: 'none' });
+    } catch (error) {
+      const message = error.message || error.errMsg || String(error);
+      const unsupported = /无效|未知|packet|指令/.test(message);
+      this.setData({ screenStatus: unsupported ? '当前固件不支持该设置，升级后可用' : '连接策略设置失败' });
+      wx.showModal({ title: unsupported ? '需要新版固件' : '设置失败', content: unsupported ? '自动断开策略需要支持 E4 指令的新版固件。' : message, showCancel: false });
+    } finally {
+      this.setData({ connecting: false });
+    }
   },
 
   onHide() {
@@ -78,6 +104,9 @@ Page({
           firmwareVersion: status.firmwareVersion || ''
         });
       });
+      if (initialStatus.idleDisconnectMinutes != null) {
+        this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
+      }
       modeState.set('off');
       const previousVersion = wx.getStorageSync('autoalbum_ota_previous_version');
       let screenStatus = '配套固件已确认，可以同步图片';

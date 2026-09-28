@@ -68,7 +68,7 @@ async function setClockFace(face, interval = 5) {
     throw new Error('当前固件不支持时钟样式和刷新间隔设置，请升级到 2.0.0 或更高版本');
   }
   const style = face === 'analog' ? 1 : 0;
-  const minutes = Math.max(1, Math.min(1440, Number(interval) || 5));
+  const minutes = Math.max(1, Math.min(999, Number(interval) || 5));
   const status = await protocol.command(1, new Uint8Array([0xe3, style, minutes & 255, minutes >> 8]));
   log.info('CTRL', `clock face=${style} interval=${minutes}m`);
   return status;
@@ -124,6 +124,14 @@ async function setTime(dateText, timeText) {
   return status;
 }
 
+async function setTemperatureOffset(tenths) {
+  ensureReady();
+  const value = Math.max(-120, Math.min(120, Math.round(Number(tenths) || 0)));
+  const status = await protocol.command(1, new Uint8Array([0xfa, value & 255]));
+  log.info('CTRL', `temperature offset=${(value / 10).toFixed(1)}C`);
+  return status;
+}
+
 async function clear(fill) {
   await imageMode();
   await protocol.command(0, new Uint8Array([0, fill]));
@@ -161,5 +169,5 @@ async function raw(channel, text) {
 
 module.exports = {
   imageMode, clockMode, setClockFace, supportsClockConfiguration, disableClockMode, disableImageMode, syncTime, setTime, clear, fullRefresh, raw,
-  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes
+  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes, setTemperatureOffset
 };

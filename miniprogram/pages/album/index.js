@@ -85,6 +85,10 @@ Page({
 
   updateCarouselStatus(status) {
     if (!status || !ble.isConnected()) return;
+    if (this.data.syncing && status.busy) {
+      const labels = ['', '等待设备执行指令', '设备正在准备屏幕', '设备正在清屏', '墨水屏正在刷新'];
+      this.setData({ stage: `${labels[status.state] || '设备正在处理'}，可停止当前上传` });
+    }
     this.setData({ carouselCount: status.carouselCount || 0, carouselIndex: status.carouselIndex - 1 });
     if (!status.carouselEnabled) {
       if (this.data.carouselRunning) this.setData({ carouselRunning: false, carouselPaused: false, stage: '设备离线轮播已停止' });

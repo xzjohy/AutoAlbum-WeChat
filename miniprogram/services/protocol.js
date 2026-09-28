@@ -19,7 +19,14 @@ let pollTimer = null;
 let statusListener = null;
 const statusListeners = [];
 let lastStatus = null;
+const idleWaiters = [];
 let lastStatusSignature = '';
+const operationListeners = [];
+
+function emitOperation(type, detail = {}) {
+  const event = Object.assign({ type, at: Date.now() }, detail);
+  operationListeners.slice().forEach(listener => listener(event));
+}
 
 function errorReason(code) {
   return reasons[code] || '设备返回未知错误 ' + code;
@@ -42,11 +49,12 @@ function clearState(message) {
     pending.reject(new Error(message));
     pending = null;
   }
+  while (idleWaiters.length) idleWaiters.shift().reject(new Error(message));
 }
 
 function receive(buffer) {
   const bytes = new Uint8Array(buffer);
-  if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] !== 1) return;
+  if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] < 1) return;
   const status = {
     token: bytes[2] | bytes[3] << 8,
     state: bytes[4],
@@ -61,7 +69,10 @@ function receive(buffer) {
     carouselIndex: bytes.length >= 15 ? bytes[13] : 0,
     carouselCount: bytes.length >= 15 ? bytes[14] : 0,
     carouselPaused: bytes.length >= 16 ? !!bytes[15] : false,
-    firmwareVersion: bytes.length >= 19 ? `${bytes[16]}.${bytes[17]}.${bytes[18]}` : ''
+    firmwareVersion: bytes.length >= 19 ? `${bytes[16]}.${bytes[17]}.${bytes[18]}` : '',
+    tempOffsetTenths: bytes.length >= 20 ? (bytes[19] > 127 ? bytes[19] - 256 : bytes[19]) : null,
+    idleDisconnectMinutes: bytes.length >= 22 ? bytes[20] | bytes[21] << 8 : null,
+    capabilities: bytes.length >= 23 ? bytes[22] : 0
   };
   const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
   if (!lastStatusSignature) {
@@ -70,6 +81,7 @@ function receive(buffer) {
   }
   lastStatus = status;
   busy = (status.state >= 1 && status.state <= 4) || !!status.busy;
+  emitOperation('status', { status, busy });
   if (statusListener) statusListener(status);
   statusListeners.slice().forEach(listener => listener(status));
   if (hello) {
@@ -86,6 +98,10 @@ function receive(buffer) {
     clearTimeout(current.timer);
     if (status.state === 5) current.resolve(status);
     else current.reject(new Error(errorReason(status.reason)));
+  }
+  if (!busy && !pending) {
+    while (idleWaiters.length) idleWaiters.shift().resolve();
+    emitOperation('idle');
   }
 }
 
@@ -117,23 +133,48 @@ async function start(listener) {
   return status;
 }
 
+function waitForIdle(timeoutMs = 150000) {
+  if (!ready) return Promise.reject(new Error('设备状态服务未就绪，请重新连接'));
+  if (!pending && !busy) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const waiter = {
+      resolve: () => { clearTimeout(waiter.timer); resolve(); },
+      reject: error => { clearTimeout(waiter.timer); reject(error); }
+    };
+    waiter.timer = setTimeout(() => {
+      const index = idleWaiters.indexOf(waiter);
+      if (index >= 0) idleWaiters.splice(index, 1);
+      reject(new Error('设备长时间未释放屏幕操作，请取消等待并重新连接'));
+    }, timeoutMs);
+    idleWaiters.push(waiter);
+    emitOperation('waiting', { status: lastStatus, timeoutMs });
+    ble.write(new Uint8Array([5])).catch(() => {});
+  });
+}
+
 function command(channel, value) {
   const body = value instanceof Uint8Array ? value : new Uint8Array(value);
   if (!ready) return Promise.reject(new Error('设备状态服务未就绪，请重新连接'));
-  if (pending || busy) return Promise.reject(new Error('墨水屏仍在处理上一条指令'));
   if (!body.length || body.length > 243) return Promise.reject(new Error('指令长度超限'));
+  return waitForIdle().then(() => sendCommand(channel, body));
+}
+
+function sendCommand(channel, body) {
+  if (pending || busy) return Promise.reject(new Error('墨水屏仍在处理上一条指令'));
   const token = sequence;
   sequence = token % 65535 + 1;
   const packet = new Uint8Array(body.length + 4);
   packet.set([6, token & 255, token >> 8, channel]);
   packet.set(body, 4);
   return new Promise((resolve, reject) => {
+    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xdd;
     const timer = setTimeout(() => {
       if (!pending || pending.token !== token) return;
       pending = null;
       reject(new Error('等待设备执行结果超时，结果未知，请重新连接'));
-    }, 140000);
+    }, isLongOperation ? 140000 : 30000);
     pending = { token, resolve, reject, timer };
+    emitOperation('sent', { token, channel, command: body[0] });
     ble.write(packet).catch(error => {
       if (!pending || pending.token !== token) return;
       pending = null;
@@ -143,13 +184,28 @@ function command(channel, value) {
   });
 }
 
+function cancelWaiting(reason = '已取消等待，设备当前刷新不会被中断') {
+  while (idleWaiters.length) idleWaiters.shift().reject(new Error(reason));
+  emitOperation('wait-cancelled');
+}
+
 module.exports = {
   start,
   command,
+  waitForIdle,
+  cancelWaiting,
   close: () => clearState('连接已关闭'),
   abort: (reason = '操作已取消') => clearState(reason),
   isReady: () => ready,
+  isBusy: () => busy || !!pending,
   getStatus: () => lastStatus,
+  onOperation: listener => {
+    if (!operationListeners.includes(listener)) operationListeners.push(listener);
+    return () => {
+      const index = operationListeners.indexOf(listener);
+      if (index >= 0) operationListeners.splice(index, 1);
+    };
+  },
   onStatus: listener => {
     if (!statusListeners.includes(listener)) statusListeners.push(listener);
     return () => {
