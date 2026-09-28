@@ -165,8 +165,12 @@ Page({
 
   inputTemperatureOffset(event) { this.setData({ tempOffsetDraft: event.detail.value }); },
   applyTemperatureOffset() {
-    let degrees = Number(this.data.tempOffsetDraft);
-    if (!Number.isFinite(degrees)) degrees = 0;
+    const text = String(this.data.tempOffsetDraft || '').trim();
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) {
+      wx.showToast({ title: '请输入有效温度，例如 -1.5', icon: 'none' });
+      return;
+    }
+    let degrees = Number(text);
     degrees = Math.max(-12, Math.min(12, Math.round(degrees * 10) / 10));
     this.setData({ tempOffsetDraft: degrees.toFixed(1) });
     return this.run('正在保存温度校准', () => control.setTemperatureOffset(Math.round(degrees * 10)));

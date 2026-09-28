@@ -205,6 +205,7 @@ module.exports = {
   isReady: () => ready,
   isBusy: () => busy || !!pending,
   getStatus: () => lastStatus,
+  setStatusListener: listener => { statusListener = listener || null; },
   onOperation: listener => {
     if (!operationListeners.includes(listener)) operationListeners.push(listener);
     return () => {

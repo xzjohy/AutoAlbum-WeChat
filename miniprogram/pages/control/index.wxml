@@ -57,7 +57,7 @@
   <view class="panel" wx:if="{{connected}}">
     <view class="panel-title">温度校准</view>
     <view class="muted">正数提高显示温度，负数降低；范围 −12.0～+12.0°C</view>
-    <view class="refresh-setting"><view class="setting-title">校准偏移</view><view class="interval-input"><input type="digit" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
+    <view class="refresh-setting"><view class="setting-title">校准偏移</view><view class="interval-input"><input type="text" maxlength="5" placeholder="例如 -1.5" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
     <button class="tech-btn ghost" disabled="{{busy}}" bindtap="applyTemperatureOffset">保存到设备</button>
   </view>
   <view class="panel operation-panel" wx:if="{{operationDetail}}">

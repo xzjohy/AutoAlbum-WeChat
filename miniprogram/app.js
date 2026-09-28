@@ -1,17 +1,5 @@
 const logger = require('./utils/logger');
-const ble = require('./services/ble');
-const protocol = require('./services/protocol');
 const onlineClock = require('./services/online-clock');
-
-async function releaseBluetooth(reason) {
-  protocol.close();
-  try {
-    await ble.release();
-    logger.info('APP', `蓝牙连接已释放：${reason}`);
-  } catch (error) {
-    logger.warn('APP', `释放蓝牙连接失败：${error.errMsg || error.message || error}`);
-  }
-}
 
 App({
   onLaunch() {
@@ -22,8 +10,9 @@ App({
     onlineClock.start();
   },
   onHide() {
-    // Keep the link while switching tabs, but release it when the app is backgrounded.
+    // Backgrounding pauses phone-driven clock sync but deliberately keeps BLE.
+    // The firmware's configurable idle lease remains the disconnect authority.
     onlineClock.stop();
-    releaseBluetooth('小程序进入后台');
+    logger.info('APP', '小程序进入后台，保留蓝牙连接');
   }
 });

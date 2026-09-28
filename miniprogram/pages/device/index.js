@@ -66,8 +66,8 @@ Page({
 
   onUnload() {
     if (this.removeDisconnectListener) this.removeDisconnectListener();
-    protocol.close();
-    ble.release().catch(() => {});
+    // Page destruction must not tear down the app-wide BLE session.
+    protocol.setStatusListener(null);
   },
 
   async scan() {
