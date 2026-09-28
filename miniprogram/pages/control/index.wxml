@@ -7,7 +7,7 @@
   </view>
 
   <view class="panel">
-    <view class="clock-mode-row"><view><view class="panel-title">时钟模式</view><view class="muted">开启时自动同步当前时间；与图片模式不能同时开启</view></view><switch color="#927cff" checked="{{clockModeActive}}" disabled="{{!connected || busy}}" bindchange="toggleClockMode"/></view>
+    <view class="clock-mode-row"><view><view class="panel-title">时钟模式</view><view class="muted">修改先暂存，点击下方应用后才刷新屏幕</view></view><switch color="#927cff" checked="{{clockModeDraft}}" disabled="{{!connected || busy}}" bindchange="toggleClockMode"/></view>
   </view>
 
   <view class="panel clock-preview-panel">
@@ -15,7 +15,7 @@
     <view class="face-switch"><button class="{{clockFace === 'digital' ? 'selected' : ''}}" data-face="digital" bindtap="selectClockFace">数码时钟</button><button class="{{clockFace === 'analog' ? 'selected' : ''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button></view>
     <canvas type="2d" id="clock-preview" class="clock-preview"></canvas>
     <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
-    <button class="tech-btn ghost" disabled="{{!connected || busy || !clockModeActive}}" bindtap="applyClockSettings">应用样式与间隔</button>
+    <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="applyClockSettings">应用时钟设置并刷新</button>
   </view>
 
   <view class="panel">
@@ -31,7 +31,7 @@
       <view><text>时间</text><input class="tech-input time-input" maxlength="8" value="{{timeText}}" bindinput="inputTime" placeholder="HH:mm:ss"/></view>
     </view>
     <view class="format-hint">发送前会检查日期是否存在、闰年以及时分秒范围。</view>
-    <button class="tech-btn ghost" disabled="{{!connected || busy || !clockModeActive}}" loading="{{busy}}" bindtap="setDeviceTime">设置到墨水屏</button>
+    <view class="muted">时间会先用于预览，并在“应用时钟设置并刷新”时一并发送。</view>
   </view>
 
   <view class="panel">

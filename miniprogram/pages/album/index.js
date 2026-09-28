@@ -59,6 +59,8 @@ Page({
     selectedIndex: 0,
     grayscale: 0,
     imageDisplayActive: false,
+    imageDisplayDraft: false,
+    imageModeDirty: false,
     imageMode: 'single',
     intervalDraft: '5',
     intervalMinutes: 5
@@ -72,7 +74,9 @@ Page({
   onShow() {
     this.setData({
       connected: ble.isConnected(),
-      imageDisplayActive: modeState.isImage()
+      imageDisplayActive: modeState.isImage(),
+      imageDisplayDraft: modeState.isImage(),
+      imageModeDirty: false
     });
     this.updateCarouselStatus(protocol.getStatus());
   },
@@ -338,10 +342,22 @@ Page({
     wx.previewImage({ current: item.previewPath, urls: this.data.images.filter(x => x.previewPath).map(x => x.previewPath) });
   },
 
-  async toggleImageMode(event) {
-    if (this.data.syncing || this.data.converting) return;
-
+  selectImageDisplayMode(event) {
     const enableImage = event.detail.value;
+    this.setData({
+      imageDisplayDraft: enableImage,
+      imageModeDirty: true,
+      stage: enableImage ? '图片模式已暂存，点击应用后生效' : '关闭图片模式已暂存，点击应用后生效'
+    });
+  },
+
+  async applyImageMode() {
+    if (this.data.syncing || this.data.converting) return;
+    const enableImage = this.data.imageDisplayDraft;
+    if (!this.data.imageModeDirty) {
+      this.setData({ imageDisplayActive: enableImage });
+      return wx.showToast({ title: '没有待应用的图片模式设置', icon: 'none' });
+    }
 
     this.setData({
       syncing: true,
@@ -358,6 +374,8 @@ Page({
 
       this.setData({
         imageDisplayActive: enableImage,
+        imageDisplayDraft: enableImage,
+        imageModeDirty: false,
         stage: enableImage
           ? '已切换为图片模式'
           : '图片模式已关闭'
@@ -370,7 +388,9 @@ Page({
       });
     } catch (error) {
       this.setData({
-        imageDisplayActive: modeState.isImage()
+        imageDisplayActive: modeState.isImage(),
+        imageDisplayDraft: modeState.isImage(),
+        imageModeDirty: false
       });
 
       this.showSyncError(error);
@@ -477,7 +497,9 @@ Page({
       this.setData({
         stage: '设备已确认刷新完成',
         progress: 100,
-        imageDisplayActive: true
+        imageDisplayActive: true,
+        imageDisplayDraft: true,
+        imageModeDirty: false
       });
 
       wx.showToast({
@@ -516,6 +538,8 @@ Page({
         carouselRunning: true,
         carouselPaused: false,
         imageDisplayActive: true,
+        imageDisplayDraft: true,
+        imageModeDirty: false,
         progress: 100,
         stage: `已保存 ${this.data.images.length} 张，设备每 ${minutes} 分钟自动轮播`
       });

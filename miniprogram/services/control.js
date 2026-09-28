@@ -74,22 +74,23 @@ async function setClockFace(face, interval = 5) {
   return status;
 }
 
-async function clockMode(face = 'digital', interval = 5) {
+async function clockMode(face = 'digital', interval = 5, dateText, timeText) {
   ensureReady();
   const current = protocol.getStatus();
   const configureClock = supportsClockConfiguration()
     ? () => setClockFace(face, interval)
     : () => Promise.resolve();
+  const time = dateText && timeText ? customTimeCommand(dateText, timeText) : localTimeCommand();
   if (current && current.scene !== 0) {
     await configureClock();
-    const status = await protocol.command(1, localTimeCommand());
+    const status = await protocol.command(1, time);
     mode.set('clock');
     log.info('CTRL', 'clock time synchronized');
     return status;
   }
   // In image mode, set time first so switching mode causes only one full refresh.
   await configureClock();
-  await protocol.command(1, localTimeCommand());
+  await protocol.command(1, time);
   const status = await protocol.command(1, new Uint8Array([0xe1, 2]));
   mode.set('clock');
   log.info('CTRL', 'clock mode and time synchronized');

@@ -15,7 +15,8 @@
 
   <view class="panel mode-control">
     <view><view class="panel-title">图片显示模式</view><view class="muted">停止时钟自动刷新，保持当前图片画面</view></view>
-    <switch color="#21d3df" checked="{{imageDisplayActive}}" disabled="{{!connected || syncing || converting}}" bindchange="toggleImageMode"/>
+    <switch color="#21d3df" checked="{{imageDisplayDraft}}" disabled="{{!connected || syncing || converting}}" bindchange="selectImageDisplayMode"/>
+    <button class="mini-action" disabled="{{!connected || syncing || converting}}" bindtap="applyImageMode">应用模式</button>
   </view>
 
   <view class="panel">

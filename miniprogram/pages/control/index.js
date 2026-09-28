@@ -33,6 +33,9 @@ Page({
   data: {
     connected: false,
     clockModeActive: false,
+    clockModeDraft: false,
+    clockTimeDirty: false,
+    clockSettingsDirty: false,
     busy: false,
     status: '等待操作',
     rawCommand: 'E102',
@@ -82,6 +85,8 @@ Page({
     this.setData(Object.assign({
       connected: ble.isConnected(),
       clockModeActive: modeState.isClock(),
+      clockModeDraft: modeState.isClock(),
+      clockSettingsDirty: false,
       onlineSyncEnabled: online.enabled,
       onlineSyncDraft: String(online.intervalMinutes),
       onlineSyncMinutes: online.intervalMinutes
@@ -96,8 +101,10 @@ Page({
   async run(label, action) {
     if (this.data.busy) return;
     this.setData({ busy: true, status: label });
+    let succeeded = false;
     try {
       await action();
+      succeeded = true;
       this.setData({ status: label + '完成' });
       wx.showToast({ title: '操作完成' });
     } catch (error) {
@@ -106,44 +113,37 @@ Page({
     } finally {
       this.setData({ busy: false, connected: ble.isConnected(), clockModeActive: modeState.isClock() });
     }
+    return succeeded;
   },
 
-  async toggleClockMode(event) {
-    if (this.data.busy) return;
+  toggleClockMode(event) {
     const enableClock = event.detail.value;
-    this.setData({ busy: true, status: enableClock ? '正在切换时钟模式' : '正在关闭时钟模式' });
-    try {
-      if (enableClock) await control.clockMode(this.data.clockFace, this.normalizeRefreshInterval());
-      else await control.disableClockMode();
-      this.setData({ clockModeActive: enableClock, status: enableClock ? '时钟模式已启用' : '时钟模式已关闭' });
-      wx.showToast({ title: enableClock ? '时钟模式已启用' : '时钟模式已关闭' });
-    } catch (error) {
-      this.setData({ clockModeActive: modeState.isClock(), status: '模式切换失败' });
-      wx.showModal({ title: '控制失败', content: error.message || error.errMsg || String(error), showCancel: false });
-    } finally {
-      this.setData({ busy: false, connected: ble.isConnected() });
-    }
+    this.setData({
+      clockModeDraft: enableClock,
+      clockSettingsDirty: true,
+      status: enableClock ? '时钟模式已暂存，点击应用后生效' : '关闭时钟模式已暂存，点击应用后生效'
+    });
   },
 
   inputDate(event) {
-    this.setData({ dateText: event.detail.value });
+    this.setData({ dateText: event.detail.value, clockTimeDirty: true, clockSettingsDirty: true });
     this.drawClockPreview();
   },
   inputTime(event) {
-    this.setData({ timeText: event.detail.value });
+    this.setData({ timeText: event.detail.value, clockTimeDirty: true, clockSettingsDirty: true });
     this.drawClockPreview();
   },
   useCurrentTime() {
-    this.setData(currentFields());
+    this.setData(Object.assign(currentFields(), { clockTimeDirty: true, clockSettingsDirty: true }));
     this.drawClockPreview();
   },
   selectClockFace(event) {
     const clockFace = event.currentTarget.dataset.face;
-    this.setData({ clockFace });
+    this.setData({ clockFace, clockSettingsDirty: true });
     this.drawClockPreview();
   },
   inputRefreshInterval(event) {
-    this.setData({ refreshIntervalDraft: event.detail.value });
+    this.setData({ refreshIntervalDraft: event.detail.value, clockSettingsDirty: true });
   },
   normalizeRefreshInterval() {
     const minutes = Math.max(1, Math.min(999, parseInt(this.data.refreshIntervalDraft, 10) || 5));
@@ -151,8 +151,30 @@ Page({
     return minutes;
   },
   applyClockSettings() {
+    if (!this.data.clockSettingsDirty) return wx.showToast({ title: '没有待应用的时钟设置', icon: 'none' });
     const minutes = this.normalizeRefreshInterval();
-    return this.run('正在更新时钟样式', () => control.setClockFace(this.data.clockFace, minutes));
+    const enableClock = this.data.clockModeDraft;
+    const shouldSetTime = this.data.clockTimeDirty;
+    const label = enableClock ? '正在应用时钟设置' : '正在关闭时钟模式';
+    return this.run(label, async () => {
+      if (!enableClock) {
+        if (modeState.isClock()) await control.disableClockMode();
+        return;
+      }
+      if (!modeState.isClock()) {
+        await control.clockMode(this.data.clockFace, minutes, this.data.dateText, this.data.timeText);
+        return;
+      }
+      await control.setClockFace(this.data.clockFace, minutes);
+      if (shouldSetTime) await control.setTime(this.data.dateText, this.data.timeText);
+    }).then(succeeded => {
+      if (succeeded) this.setData({
+        clockModeActive: enableClock,
+        clockModeDraft: enableClock,
+        clockTimeDirty: false,
+        clockSettingsDirty: false
+      });
+    });
   },
 
   async cancelCurrentOperation() {
@@ -278,11 +300,8 @@ Page({
       footer();
     });
   },
-  setDeviceTime() {
-    return this.run('正在设置设备时间', () => control.setTime(this.data.dateText, this.data.timeText));
-  },
   syncTime() {
-    this.setData(currentFields());
+    this.setData(Object.assign(currentFields(), { clockTimeDirty: false, clockSettingsDirty: false }));
     return this.run('正在同步当前时间', control.syncTime);
   },
   clearBlack() { return this.run('正在清屏全黑', () => control.clear(0)); },
