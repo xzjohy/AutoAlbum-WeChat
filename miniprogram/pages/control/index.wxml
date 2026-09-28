@@ -11,11 +11,14 @@
   </view>
 
   <view class="panel clock-preview-panel">
-    <view class="row"><view><view class="panel-title">时钟样式预览</view><view class="muted">选择后开启时钟模式即可发送到墨水屏</view></view><view class="face-tag">{{clockFace === 'digital' ? '数码' : '指针'}}</view></view>
+    <view class="row"><view><view class="panel-title">显示参数与时钟预览</view><view class="muted">以下参数先暂存，统一应用后刷新屏幕</view></view><view class="face-tag">{{clockFace === 'digital' ? '数码' : '指针'}}</view></view>
     <view class="face-switch"><button class="{{clockFace === 'digital' ? 'selected' : ''}}" data-face="digital" bindtap="selectClockFace">数码时钟</button><button class="{{clockFace === 'analog' ? 'selected' : ''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button></view>
     <canvas type="2d" id="clock-preview" class="clock-preview"></canvas>
-    <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
-    <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="applyClockSettings">应用时钟设置并刷新</button>
+    <view class="settings-table">
+      <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
+      <view class="refresh-setting"><view><view class="setting-title">温度补偿</view><view class="muted">−12.0～+12.0°C</view></view><view class="interval-input"><input type="text" maxlength="5" placeholder="例如 -1.5" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
+    </view>
+    <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="applyClockSettings">应用显示参数并刷新</button>
   </view>
 
   <view class="panel">
@@ -54,12 +57,6 @@
     <button class="tech-btn ghost" disabled="{{!connected || busy}}" loading="{{busy}}" bindtap="sendRaw">发送指令</button>
   </view>
 
-  <view class="panel" wx:if="{{connected}}">
-    <view class="panel-title">温度校准</view>
-    <view class="muted">正数提高显示温度，负数降低；范围 −12.0～+12.0°C</view>
-    <view class="refresh-setting"><view class="setting-title">校准偏移</view><view class="interval-input"><input type="text" maxlength="5" placeholder="例如 -1.5" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
-    <button class="tech-btn ghost" disabled="{{busy}}" bindtap="applyTemperatureOffset">保存到设备</button>
-  </view>
   <view class="panel operation-panel" wx:if="{{operationDetail}}">
     <view class="row"><view><view class="panel-title">设备操作进行中</view><view class="muted">{{operationDetail}}</view></view><text class="operation-time">{{operationSeconds}}s</text></view>
     <view class="indeterminate"><view></view></view>

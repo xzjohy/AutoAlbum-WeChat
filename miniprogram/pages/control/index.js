@@ -52,7 +52,8 @@ Page({
     onlineSyncMinutes: 5,
     operationSeconds: 0,
     operationDetail: '',
-    tempOffsetDraft: '0.0'
+    tempOffsetDraft: '0.0',
+    tempOffsetDirty: false
   },
 
   onLoad() {
@@ -93,7 +94,7 @@ Page({
     }, fields));
     const deviceStatus = protocol.getStatus();
     if (deviceStatus && deviceStatus.tempOffsetTenths != null) {
-      this.setData({ tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1) });
+      this.setData({ tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1), tempOffsetDirty: false });
     }
     this.drawClockPreview();
   },
@@ -151,12 +152,30 @@ Page({
     return minutes;
   },
   applyClockSettings() {
-    if (!this.data.clockSettingsDirty) return wx.showToast({ title: '没有待应用的时钟设置', icon: 'none' });
+    const hasClockChanges = this.data.clockSettingsDirty;
+    const hasTemperatureChanges = this.data.tempOffsetDirty;
+    if (!hasClockChanges && !hasTemperatureChanges) return wx.showToast({ title: '没有待应用的显示参数', icon: 'none' });
+    let temperatureTenths = null;
+    if (hasTemperatureChanges) {
+      const text = String(this.data.tempOffsetDraft || '').trim();
+      if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) {
+        wx.showToast({ title: '请输入有效温度，例如 -1.5', icon: 'none' });
+        return;
+      }
+      const degrees = Math.max(-12, Math.min(12, Math.round(Number(text) * 10) / 10));
+      temperatureTenths = Math.round(degrees * 10);
+      this.setData({ tempOffsetDraft: degrees.toFixed(1) });
+    }
     const minutes = this.normalizeRefreshInterval();
     const enableClock = this.data.clockModeDraft;
     const shouldSetTime = this.data.clockTimeDirty;
-    const label = enableClock ? '正在应用时钟设置' : '正在关闭时钟模式';
+    const label = enableClock ? '正在应用显示参数' : '正在关闭时钟模式';
     return this.run(label, async () => {
+      if (temperatureTenths != null) await control.setTemperatureOffset(temperatureTenths);
+      if (!hasClockChanges) {
+        if (modeState.isClock()) await control.fullRefresh();
+        return;
+      }
       if (!enableClock) {
         if (modeState.isClock()) await control.disableClockMode();
         return;
@@ -172,7 +191,8 @@ Page({
         clockModeActive: enableClock,
         clockModeDraft: enableClock,
         clockTimeDirty: false,
-        clockSettingsDirty: false
+        clockSettingsDirty: false,
+        tempOffsetDirty: false
       });
     });
   },
@@ -185,18 +205,7 @@ Page({
     wx.showToast({ title: '已安全断开', icon: 'none' });
   },
 
-  inputTemperatureOffset(event) { this.setData({ tempOffsetDraft: event.detail.value }); },
-  applyTemperatureOffset() {
-    const text = String(this.data.tempOffsetDraft || '').trim();
-    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) {
-      wx.showToast({ title: '请输入有效温度，例如 -1.5', icon: 'none' });
-      return;
-    }
-    let degrees = Number(text);
-    degrees = Math.max(-12, Math.min(12, Math.round(degrees * 10) / 10));
-    this.setData({ tempOffsetDraft: degrees.toFixed(1) });
-    return this.run('正在保存温度校准', () => control.setTemperatureOffset(Math.round(degrees * 10)));
-  },
+  inputTemperatureOffset(event) { this.setData({ tempOffsetDraft: event.detail.value, tempOffsetDirty: true }); },
   inputOnlineSyncInterval(event) {
     this.setData({ onlineSyncDraft: event.detail.value });
   },
