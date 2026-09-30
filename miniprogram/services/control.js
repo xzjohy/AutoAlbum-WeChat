@@ -62,23 +62,27 @@ async function imageMode() {
   return status;
 }
 
-async function setClockFace(face, interval = 5) {
+async function setClockFace(face, interval = 5, batteryVisible) {
   ensureReady();
   if (!supportsClockConfiguration()) {
     throw new Error('当前固件不支持时钟样式和刷新间隔设置，请升级到 2.0.0 或更高版本');
   }
   const style = face === 'analog' ? 1 : 0;
   const minutes = Math.max(1, Math.min(999, Number(interval) || 5));
-  const status = await protocol.command(1, new Uint8Array([0xe3, style, minutes & 255, minutes >> 8]));
+  const supportsBattery = !!((protocol.getStatus() || {}).capabilities & 0x08);
+  const bytes = supportsBattery && batteryVisible != null
+    ? new Uint8Array([0xe3, style, minutes & 255, minutes >> 8, batteryVisible ? 1 : 0])
+    : new Uint8Array([0xe3, style, minutes & 255, minutes >> 8]);
+  const status = await protocol.command(1, bytes);
   log.info('CTRL', `clock face=${style} interval=${minutes}m`);
   return status;
 }
 
-async function clockMode(face = 'digital', interval = 5, dateText, timeText) {
+async function clockMode(face = 'digital', interval = 5, dateText, timeText, batteryVisible) {
   ensureReady();
   const current = protocol.getStatus();
   const configureClock = supportsClockConfiguration()
-    ? () => setClockFace(face, interval)
+    ? () => setClockFace(face, interval, batteryVisible)
     : () => Promise.resolve();
   const time = dateText && timeText ? customTimeCommand(dateText, timeText) : localTimeCommand();
   if (current && current.scene !== 0) {
@@ -133,6 +137,17 @@ async function setTemperatureOffset(tenths) {
   return status;
 }
 
+async function setBatteryVisible(visible) {
+  ensureReady();
+  const status = protocol.getStatus();
+  if (!status || !(status.capabilities & 0x08)) {
+    throw new Error('当前固件不支持电量显示开关，请升级到 2.2.6 或更高版本');
+  }
+  const result = await protocol.command(1, new Uint8Array([0xe6, visible ? 1 : 0]));
+  log.info('CTRL', `clock battery visible=${visible ? 1 : 0}`);
+  return result;
+}
+
 async function clear(fill) {
   await imageMode();
   await protocol.command(0, new Uint8Array([0, fill]));
@@ -170,5 +185,5 @@ async function raw(channel, text) {
 
 module.exports = {
   imageMode, clockMode, setClockFace, supportsClockConfiguration, disableClockMode, disableImageMode, syncTime, setTime, clear, fullRefresh, raw,
-  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes, setTemperatureOffset
+  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes, setTemperatureOffset, setBatteryVisible
 };

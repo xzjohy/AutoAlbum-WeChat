@@ -17,6 +17,7 @@
     <view class="settings-table">
       <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>
       <view class="refresh-setting"><view><view class="setting-title">温度补偿</view><view class="muted">−12.0～+12.0°C</view></view><view class="interval-input"><input type="text" maxlength="5" placeholder="例如 -1.5" value="{{tempOffsetDraft}}" disabled="{{busy}}" bindinput="inputTemperatureOffset"/><text>°C</text></view></view>
+      <view class="refresh-setting"><view><view class="setting-title">显示电池电量</view><view class="muted">当前 {{batteryLevel}}%，在横线上方居中显示</view></view><switch color="#927cff" checked="{{batteryVisible}}" disabled="{{busy || !connected}}" bindchange="toggleBatteryVisible"/></view>
     </view>
     <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="applyClockSettings">应用显示参数并刷新</button>
   </view>

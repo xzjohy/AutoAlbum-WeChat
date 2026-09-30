@@ -53,7 +53,10 @@ Page({
     operationSeconds: 0,
     operationDetail: '',
     tempOffsetDraft: '0.0',
-    tempOffsetDirty: false
+    tempOffsetDirty: false,
+    batteryVisible: true,
+    batteryVisibleDirty: false,
+    batteryLevel: 0
   },
 
   onLoad() {
@@ -64,7 +67,8 @@ Page({
         const labels = ['', '已接收', '正在准备屏幕', '正在清屏', '正在刷新'];
         this.setData({
           operationSeconds: event.status.seconds || 0,
-          operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : ''
+          operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : '',
+          batteryLevel: event.status.batteryLevel == null ? this.data.batteryLevel : event.status.batteryLevel
         });
       } else if (event.type === 'idle') {
         this.setData({ operationDetail: '', operationSeconds: 0 });
@@ -94,8 +98,15 @@ Page({
     }, fields));
     const deviceStatus = protocol.getStatus();
     if (deviceStatus && deviceStatus.tempOffsetTenths != null) {
-      this.setData({ tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1), tempOffsetDirty: false });
+      this.setData({
+        tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1),
+        tempOffsetDirty: false,
+        batteryVisible: deviceStatus.batteryVisible !== false,
+        batteryVisibleDirty: false,
+        batteryLevel: deviceStatus.batteryLevel == null ? this.data.batteryLevel : deviceStatus.batteryLevel
+      });
     }
+    onlineClock.start();
     this.drawClockPreview();
   },
 
@@ -146,6 +157,10 @@ Page({
   inputRefreshInterval(event) {
     this.setData({ refreshIntervalDraft: event.detail.value, clockSettingsDirty: true });
   },
+  toggleBatteryVisible(event) {
+    this.setData({ batteryVisible: event.detail.value, batteryVisibleDirty: true, clockSettingsDirty: true });
+    this.drawClockPreview();
+  },
   normalizeRefreshInterval() {
     const minutes = Math.max(1, Math.min(999, parseInt(this.data.refreshIntervalDraft, 10) || 5));
     this.setData({ refreshIntervalDraft: String(minutes), refreshIntervalMinutes: minutes });
@@ -181,10 +196,10 @@ Page({
         return;
       }
       if (!modeState.isClock()) {
-        await control.clockMode(this.data.clockFace, minutes, this.data.dateText, this.data.timeText);
+        await control.clockMode(this.data.clockFace, minutes, this.data.dateText, this.data.timeText, this.data.batteryVisible);
         return;
       }
-      await control.setClockFace(this.data.clockFace, minutes);
+      await control.setClockFace(this.data.clockFace, minutes, this.data.batteryVisible);
       if (shouldSetTime) await control.setTime(this.data.dateText, this.data.timeText);
     }).then(succeeded => {
       if (succeeded) this.setData({
@@ -192,7 +207,8 @@ Page({
         clockModeDraft: enableClock,
         clockTimeDirty: false,
         clockSettingsDirty: false,
-        tempOffsetDirty: false
+        tempOffsetDirty: false,
+        batteryVisibleDirty: false
       });
     });
   },
@@ -273,6 +289,10 @@ Page({
         ctx.font = '18px sans-serif';
         ctx.fillStyle = '#a72424';
         ctx.fillText(`:${pad(time.second)}  DIGITAL`, width / 2, height * 0.61);
+        if (this.data.batteryVisible) {
+          ctx.font = '15px sans-serif'; ctx.fillStyle = '#161a1d';
+          ctx.fillText(`BAT ${this.data.batteryLevel}%`, width / 2, height * 0.69);
+        }
         footer();
         return;
       }
@@ -306,6 +326,10 @@ Page({
       hand((time.minute + time.second / 60) * Math.PI / 30 - Math.PI / 2, radius * 0.72, 5, '#161a1d');
       hand(time.second * Math.PI / 30 - Math.PI / 2, radius * 0.78, 2, '#a72424');
       ctx.fillStyle = '#a72424'; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+      if (this.data.batteryVisible) {
+        ctx.font = '15px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#161a1d';
+        ctx.fillText(`BAT ${this.data.batteryLevel}%`, width / 2, height * 0.69);
+      }
       footer();
     });
   },

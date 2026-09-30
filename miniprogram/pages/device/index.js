@@ -111,7 +111,7 @@ Page({
       if (initialStatus.idleDisconnectMinutes != null && initialStatus.idleDisconnectMinutes > 0) {
         this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
       }
-      modeState.set('off');
+      modeState.set(initialStatus.scene === 2 ? 'clock' : (initialStatus.scene === 0 ? 'image' : 'off'));
       const previousVersion = wx.getStorageSync('autoalbum_ota_previous_version');
       let screenStatus = '配套固件已确认，可以同步图片';
       if (previousVersion && initialStatus.firmwareVersion) {

@@ -40,6 +40,7 @@ function start() {
   if (!current.enabled) return;
   timer = setInterval(tick, current.intervalMinutes * 60 * 1000);
   log.info('CLOCK', `online sync every ${current.intervalMinutes}m`);
+  if (ble.isConnected() && protocol.isReady()) tick();
 }
 
 function configure(next) {

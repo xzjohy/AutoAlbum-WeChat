@@ -73,7 +73,9 @@ function receive(buffer) {
     firmwareVersion: bytes.length >= 19 ? `${bytes[16]}.${bytes[17]}.${bytes[18]}` : '',
     tempOffsetTenths: bytes.length >= 20 ? (bytes[19] > 127 ? bytes[19] - 256 : bytes[19]) : null,
     idleDisconnectMinutes: bytes.length >= 22 ? bytes[20] | bytes[21] << 8 : null,
-    capabilities: bytes.length >= 23 ? bytes[22] : 0
+    capabilities: bytes.length >= 23 ? bytes[22] : 0,
+    batteryVisible: bytes.length >= 24 ? !!bytes[23] : true,
+    batteryLevel: bytes.length >= 25 ? bytes[24] : null
   };
   const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
   if (!lastStatusSignature) {
@@ -173,7 +175,7 @@ function sendCommand(channel, body) {
   packet.set([6, token & 255, token >> 8, channel]);
   packet.set(body, 4);
   return new Promise((resolve, reject) => {
-    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xdd;
+    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xe6 || body[0] === 0xdd;
     const timer = setTimeout(() => {
       if (!pending || pending.token !== token) return;
       pending = null;
