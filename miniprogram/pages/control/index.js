@@ -262,7 +262,15 @@ Page({
         ctx.strokeStyle = '#161a1d'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(width * 0.06, height * 0.17); ctx.lineTo(width * 0.94, height * 0.17); ctx.stroke();
         ctx.font = '16px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#161a1d';
-        ctx.fillText('S24 E-PAPER', width * 0.07, height * 0.105);
+        const name = 'S24 E-PAPER';
+        const nameX = width * 0.07;
+        ctx.fillText(name, nameX, height * 0.105);
+        if (this.data.batteryVisible) {
+          const left = nameX + ctx.measureText(name).width + width * 0.03;
+          const right = width * 0.87;
+          ctx.textAlign = 'center';
+          ctx.fillText(`BAT ${this.data.batteryLevel}%`, (left + right) / 2, height * 0.105);
+        }
         ctx.fillStyle = this.data.connected ? '#161a1d' : '#a72424';
         ctx.beginPath(); ctx.arc(width * 0.91, height * 0.095, 7, 0, Math.PI * 2); ctx.fill();
       };
@@ -289,10 +297,6 @@ Page({
         ctx.font = '18px sans-serif';
         ctx.fillStyle = '#a72424';
         ctx.fillText(`:${pad(time.second)}  DIGITAL`, width / 2, height * 0.61);
-        if (this.data.batteryVisible) {
-          ctx.font = '15px sans-serif'; ctx.fillStyle = '#161a1d';
-          ctx.fillText(`BAT ${this.data.batteryLevel}%`, width / 2, height * 0.69);
-        }
         footer();
         return;
       }
@@ -326,10 +330,6 @@ Page({
       hand((time.minute + time.second / 60) * Math.PI / 30 - Math.PI / 2, radius * 0.72, 5, '#161a1d');
       hand(time.second * Math.PI / 30 - Math.PI / 2, radius * 0.78, 2, '#a72424');
       ctx.fillStyle = '#a72424'; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
-      if (this.data.batteryVisible) {
-        ctx.font = '15px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#161a1d';
-        ctx.fillText(`BAT ${this.data.batteryLevel}%`, width / 2, height * 0.69);
-      }
       footer();
     });
   },
