@@ -13,6 +13,9 @@
   <view class="panel clock-preview-panel">
     <view class="row"><view><view class="panel-title">显示参数与时钟预览</view><view class="muted">以下参数先暂存，统一应用后刷新屏幕</view></view><view class="face-tag">{{clockFace === 'digital' ? '数码' : '指针'}}</view></view>
     <view class="face-switch"><button class="{{clockFace === 'digital' ? 'selected' : ''}}" data-face="digital" bindtap="selectClockFace">数码时钟</button><button class="{{clockFace === 'analog' ? 'selected' : ''}}" data-face="analog" bindtap="selectClockFace">指针时钟</button></view>
+    <view class="setting-title">时钟刷新方式</view>
+    <view class="face-switch"><button class="{{clockRefreshMode === 'full' ? 'selected' : ''}}" disabled="{{busy}}" data-mode="full" bindtap="selectClockRefreshMode">全局刷新</button><button class="{{clockRefreshMode === 'partial' ? 'selected' : ''}}" disabled="{{busy || !partialRefreshSupported}}" data-mode="partial" bindtap="selectClockRefreshMode">局部刷新</button></view>
+    <view class="muted">局刷模式首次显示、校时和每小时仍会全刷；局刷兼容性需实机确认。{{partialRefreshSupported ? '' : '局刷选项需要固件 2.2.8 或更高版本。'}}</view>
     <canvas type="2d" id="clock-preview" class="clock-preview"></canvas>
     <view class="settings-table">
       <view class="refresh-setting"><view><view class="setting-title">时钟刷新间隔</view><view class="muted">1–999 分钟，默认 5 分钟</view></view><view class="interval-input"><input type="number" value="{{refreshIntervalDraft}}" disabled="{{busy}}" bindinput="inputRefreshInterval" bindblur="normalizeRefreshInterval"/><text>分钟</text></view></view>

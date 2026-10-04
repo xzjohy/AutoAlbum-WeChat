@@ -75,7 +75,8 @@ function receive(buffer) {
     idleDisconnectMinutes: bytes.length >= 22 ? bytes[20] | bytes[21] << 8 : null,
     capabilities: bytes.length >= 23 ? bytes[22] : 0,
     batteryVisible: bytes.length >= 24 ? !!bytes[23] : true,
-    batteryLevel: bytes.length >= 25 ? bytes[24] : null
+    batteryLevel: bytes.length >= 25 ? bytes[24] : null,
+    clockRefreshMode: bytes.length >= 26 && bytes[25] === 1 ? 'partial' : 'full'
   };
   const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
   if (!lastStatusSignature) {

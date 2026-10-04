@@ -45,6 +45,8 @@ Page({
     dateText: '',
     timeText: '',
     clockFace: 'digital',
+    clockRefreshMode: 'full',
+    partialRefreshSupported: false,
     refreshIntervalDraft: '5',
     refreshIntervalMinutes: 5,
     onlineSyncEnabled: false,
@@ -64,8 +66,10 @@ Page({
       if (event.type === 'waiting') {
         this.setData({ operationDetail: '设备正在完成上一项操作，当前指令已排队等待' });
       } else if (event.type === 'status' && event.status) {
-        const labels = ['', '已接收', '正在准备屏幕', '正在清屏', '正在刷新'];
+        const labels = ['', '已接收', '正在准备屏幕', '正在清屏', event.status.reason & 0x80 ? '正在局部刷新' : '正在全局刷新'];
         this.setData({
+          partialRefreshSupported: !!(event.status.capabilities & 0x10),
+          ...(!this.data.clockSettingsDirty ? { clockRefreshMode: event.status.clockRefreshMode || 'full' } : {}),
           operationSeconds: event.status.seconds || 0,
           operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : '',
           batteryLevel: event.status.batteryLevel == null ? this.data.batteryLevel : event.status.batteryLevel
@@ -103,6 +107,8 @@ Page({
         tempOffsetDirty: false,
         batteryVisible: deviceStatus.batteryVisible !== false,
         batteryVisibleDirty: false,
+        clockRefreshMode: deviceStatus.clockRefreshMode || 'full',
+        partialRefreshSupported: !!(deviceStatus.capabilities & 0x10),
         batteryLevel: deviceStatus.batteryLevel == null ? this.data.batteryLevel : deviceStatus.batteryLevel
       });
     }
@@ -157,6 +163,12 @@ Page({
   inputRefreshInterval(event) {
     this.setData({ refreshIntervalDraft: event.detail.value, clockSettingsDirty: true });
   },
+  selectClockRefreshMode(event) {
+    const clockRefreshMode = event.currentTarget.dataset.mode;
+    if (clockRefreshMode !== 'full' && clockRefreshMode !== 'partial') return;
+    if (clockRefreshMode === 'partial' && !this.data.partialRefreshSupported) return;
+    this.setData({ clockRefreshMode, clockSettingsDirty: true, status: '刷新方式已暂存，点击应用后生效' });
+  },
   toggleBatteryVisible(event) {
     this.setData({ batteryVisible: event.detail.value, batteryVisibleDirty: true, clockSettingsDirty: true });
     this.drawClockPreview();
@@ -196,10 +208,10 @@ Page({
         return;
       }
       if (!modeState.isClock()) {
-        await control.clockMode(this.data.clockFace, minutes, this.data.dateText, this.data.timeText, this.data.batteryVisible);
+        await control.clockMode(this.data.clockFace, minutes, this.data.dateText, this.data.timeText, this.data.batteryVisible, this.data.clockRefreshMode);
         return;
       }
-      await control.setClockFace(this.data.clockFace, minutes, this.data.batteryVisible);
+      await control.setClockFace(this.data.clockFace, minutes, this.data.batteryVisible, this.data.clockRefreshMode);
       if (shouldSetTime) await control.setTime(this.data.dateText, this.data.timeText);
     }).then(succeeded => {
       if (succeeded) this.setData({

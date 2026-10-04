@@ -62,7 +62,7 @@ async function imageMode() {
   return status;
 }
 
-async function setClockFace(face, interval = 5, batteryVisible) {
+async function setClockFace(face, interval = 5, batteryVisible, refreshMode = 'full') {
   ensureReady();
   if (!supportsClockConfiguration()) {
     throw new Error('当前固件不支持时钟样式和刷新间隔设置，请升级到 2.0.0 或更高版本');
@@ -70,19 +70,26 @@ async function setClockFace(face, interval = 5, batteryVisible) {
   const style = face === 'analog' ? 1 : 0;
   const minutes = Math.max(1, Math.min(999, Number(interval) || 5));
   const supportsBattery = !!((protocol.getStatus() || {}).capabilities & 0x08);
-  const bytes = supportsBattery && batteryVisible != null
+  const supportsPartial = !!((protocol.getStatus() || {}).capabilities & 0x10);
+  if (refreshMode === 'partial' && !supportsPartial) {
+    throw new Error('当前固件不支持可选局部刷新，请升级至 2.2.8 或更高版本');
+  }
+  const visible = batteryVisible == null ? (protocol.getStatus() || {}).batteryVisible !== false : batteryVisible;
+  const bytes = supportsPartial
+    ? new Uint8Array([0xe3, style, minutes & 255, minutes >> 8, visible ? 1 : 0, refreshMode === 'partial' ? 1 : 0])
+    : supportsBattery && batteryVisible != null
     ? new Uint8Array([0xe3, style, minutes & 255, minutes >> 8, batteryVisible ? 1 : 0])
     : new Uint8Array([0xe3, style, minutes & 255, minutes >> 8]);
   const status = await protocol.command(1, bytes);
-  log.info('CTRL', `clock face=${style} interval=${minutes}m`);
+  log.info('CTRL', `clock face=${style} interval=${minutes}m refresh=${refreshMode}`);
   return status;
 }
 
-async function clockMode(face = 'digital', interval = 5, dateText, timeText, batteryVisible) {
+async function clockMode(face = 'digital', interval = 5, dateText, timeText, batteryVisible, refreshMode = 'full') {
   ensureReady();
   const current = protocol.getStatus();
   const configureClock = supportsClockConfiguration()
-    ? () => setClockFace(face, interval, batteryVisible)
+    ? () => setClockFace(face, interval, batteryVisible, refreshMode)
     : () => Promise.resolve();
   const time = dateText && timeText ? customTimeCommand(dateText, timeText) : localTimeCommand();
   if (current && current.scene !== 0) {
