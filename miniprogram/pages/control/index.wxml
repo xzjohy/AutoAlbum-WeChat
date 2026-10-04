@@ -23,6 +23,8 @@
       <view class="refresh-setting"><view><view class="setting-title">显示电池电量</view><view class="muted">当前 {{batteryLevel}}%，在顶部名称与连接状态之间居中显示</view></view><switch color="#927cff" checked="{{batteryVisible}}" disabled="{{busy || !connected}}" bindchange="toggleBatteryVisible"/></view>
     </view>
     <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="applyClockSettings">应用显示参数并刷新</button>
+    <view class="muted">{{clockRuntimeText}}</view>
+    <button class="tech-btn ghost" disabled="{{!connected || busy}}" bindtap="readClockStatus">读取设备时钟状态</button>
   </view>
 
   <view class="panel">

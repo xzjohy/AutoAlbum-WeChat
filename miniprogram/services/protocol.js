@@ -76,7 +76,11 @@ function receive(buffer) {
     capabilities: bytes.length >= 23 ? bytes[22] : 0,
     batteryVisible: bytes.length >= 24 ? !!bytes[23] : true,
     batteryLevel: bytes.length >= 25 ? bytes[24] : null,
-    clockRefreshMode: bytes.length >= 26 && bytes[25] === 1 ? 'partial' : 'full'
+    clockRefreshMode: bytes.length >= 26 && bytes[25] === 1 ? 'partial' : 'full',
+    clockIntervalMinutes: bytes.length >= 28 ? bytes[26] | bytes[27] << 8 : null,
+    clockNow: bytes.length >= 37 ? (bytes[28] | bytes[29] << 8 | bytes[30] << 16 | bytes[31] << 24) >>> 0 : null,
+    clockLastRefresh: bytes.length >= 37 ? (bytes[32] | bytes[33] << 8 | bytes[34] << 16 | bytes[35] << 24) >>> 0 : null,
+    clockRuntimeFlags: bytes.length >= 37 ? bytes[36] : 0
   };
   const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
   if (!lastStatusSignature) {
@@ -198,9 +202,25 @@ function cancelWaiting(reason = '已取消等待，设备当前刷新不会被�
   emitOperation('wait-cancelled');
 }
 
+function requestStatus() {
+  if (!ready) return Promise.reject(new Error('请先连接设备'));
+  return new Promise((resolve, reject) => {
+    const remove = () => {
+      clearTimeout(timer);
+      const index = statusListeners.indexOf(listener);
+      if (index >= 0) statusListeners.splice(index, 1);
+    };
+    const listener = status => { remove(); resolve(status); };
+    const timer = setTimeout(() => { remove(); reject(new Error('设备状态回读超时')); }, 5000);
+    statusListeners.push(listener);
+    ble.write(new Uint8Array([5])).catch(error => { remove(); reject(error); });
+  });
+}
+
 module.exports = {
   start,
   command,
+  requestStatus,
   waitForIdle,
   cancelWaiting,
   close: () => clearState('连接已关闭'),

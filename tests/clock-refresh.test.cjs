@@ -4,15 +4,20 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 let receive;
-let capabilities = 0x1f;
+let capabilities = 0x3f;
 let refreshMode = 0;
 const writes = [];
 function reply(token = 0, command = 0) {
-  const p = new Uint8Array(capabilities & 0x10 ? 26 : 25);
+  const p = new Uint8Array(capabilities & 0x20 ? 37 : capabilities & 0x10 ? 26 : 25);
   p.set([0xe5, 2, token & 255, token >> 8, 5, 0, 2, 0, 0, 0, command, 1]);
   p.set([2, 2, capabilities & 0x10 ? 8 : 7], 16);
   p[22] = capabilities; p[23] = 1; p[24] = 86;
   if (p.length === 26) p[25] = refreshMode;
+  if (p.length === 37) {
+    p[25] = refreshMode; p[26] = 1; p[36] = 1;
+    new DataView(p.buffer).setUint32(28, 3721, true);
+    new DataView(p.buffer).setUint32(32, 3661, true);
+  }
   receive(p.buffer);
 }
 const ble = {
@@ -45,6 +50,11 @@ const control = load('miniprogram/services/control.js', {
   try {
     await protocol.start();
     assert.equal(protocol.getStatus().clockRefreshMode, 'full');
+    const diagnostic = await protocol.requestStatus();
+    assert.equal(diagnostic.clockIntervalMinutes, 1);
+    assert.equal(diagnostic.clockNow, 3721);
+    assert.equal(diagnostic.clockLastRefresh, 3661);
+    assert.equal(diagnostic.clockRuntimeFlags, 1);
     await control.setClockFace('analog', 5, false, 'partial');
     assert.deepEqual(writes.at(-1).slice(4), [0xe3, 1, 5, 0, 0, 1]);
     assert.equal(protocol.getStatus().clockRefreshMode, 'partial');

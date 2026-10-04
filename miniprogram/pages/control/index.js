@@ -6,6 +6,13 @@ const protocol = require('../../services/protocol');
 
 function pad(value) { return String(value).padStart(2, '0'); }
 
+function clockRuntimeText(status) {
+  if (status.clockNow == null) return '运行状态回读需要固件 2.2.10 或更高版本';
+  const time = value => `${pad(Math.floor(value / 3600) % 24)}:${pad(Math.floor(value / 60) % 60)}:${pad(value % 60)}`;
+  const state = status.clockRuntimeFlags & 8 ? '图片传输占用中' : status.clockRuntimeFlags & 4 ? '刷新失败，等待全刷重试' : status.clockRuntimeFlags & 2 ? '正在刷新' : '等待下一次刷新';
+  return `设备保存：${status.clockIntervalMinutes} 分钟 / ${status.clockRefreshMode === 'partial' ? '局刷' : '全刷'}；设备时间 ${time(status.clockNow)}；上次完成 ${status.clockLastRefresh ? time(status.clockLastRefresh) : '暂无'}；${state}`;
+}
+
 function currentFields() {
   const now = new Date();
   return {
@@ -47,6 +54,7 @@ Page({
     clockFace: 'digital',
     clockRefreshMode: 'full',
     partialRefreshSupported: false,
+    clockRuntimeText: '',
     refreshIntervalDraft: '5',
     refreshIntervalMinutes: 5,
     onlineSyncEnabled: false,
@@ -69,6 +77,8 @@ Page({
         const labels = ['', '已接收', '正在准备屏幕', '正在清屏', event.status.reason & 0x80 ? '正在局部刷新' : '正在全局刷新'];
         this.setData({
           partialRefreshSupported: !!(event.status.capabilities & 0x10),
+          clockRuntimeText: clockRuntimeText(event.status),
+          ...(!this.data.clockSettingsDirty && event.status.clockIntervalMinutes != null ? { refreshIntervalDraft: String(event.status.clockIntervalMinutes), refreshIntervalMinutes: event.status.clockIntervalMinutes } : {}),
           ...(!this.data.clockSettingsDirty ? { clockRefreshMode: event.status.clockRefreshMode || 'full' } : {}),
           operationSeconds: event.status.seconds || 0,
           operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : '',
@@ -109,6 +119,8 @@ Page({
         batteryVisibleDirty: false,
         clockRefreshMode: deviceStatus.clockRefreshMode || 'full',
         partialRefreshSupported: !!(deviceStatus.capabilities & 0x10),
+        clockRuntimeText: clockRuntimeText(deviceStatus),
+        ...(deviceStatus.clockIntervalMinutes != null ? { refreshIntervalDraft: String(deviceStatus.clockIntervalMinutes), refreshIntervalMinutes: deviceStatus.clockIntervalMinutes } : {}),
         batteryLevel: deviceStatus.batteryLevel == null ? this.data.batteryLevel : deviceStatus.batteryLevel
       });
     }
@@ -169,6 +181,7 @@ Page({
     if (clockRefreshMode === 'partial' && !this.data.partialRefreshSupported) return;
     this.setData({ clockRefreshMode, clockSettingsDirty: true, status: '刷新方式已暂存，点击应用后生效' });
   },
+  readClockStatus() { return this.run('正在读取设备时钟状态', protocol.requestStatus); },
   toggleBatteryVisible(event) {
     this.setData({ batteryVisible: event.detail.value, batteryVisibleDirty: true, clockSettingsDirty: true });
     this.drawClockPreview();
