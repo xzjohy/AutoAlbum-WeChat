@@ -85,9 +85,38 @@ async function setClockFace(face, interval = 5, batteryVisible, refreshMode = 'f
   return status;
 }
 
+// Commit a complete draft and optional time before one redraw on new firmware.
+async function applyClockDisplay(face, interval, batteryVisible, refreshMode, temperatureTenths, dateText, timeText) {
+  ensureReady();
+  if (!((protocol.getStatus() || {}).capabilities & 0x40)) throw new Error('合并应用显示参数需要固件 2.4.0 或更高版本');
+  const minutes = Number(interval), offset = Number(temperatureTenths);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 999) throw new Error('时钟间隔必须为 1–999 分钟');
+  if (!Number.isInteger(offset) || offset < -120 || offset > 120) throw new Error('温度补偿必须为 −12.0～+12.0°C');
+  const bytes = [0xe7, face === 'analog' ? 1 : 0, minutes & 255, minutes >> 8, batteryVisible ? 1 : 0, refreshMode === 'partial' ? 1 : 0, offset & 255, dateText && timeText ? 1 : 0];
+  if (dateText && timeText) bytes.push(...customTimeCommand(dateText, timeText).subarray(1));
+  const status = await protocol.command(1, new Uint8Array(bytes));
+  mode.set('clock');
+  return status;
+}
+
+async function setNfcEnabled(enabled, address) {
+  ensureReady();
+  if (!((protocol.getStatus() || {}).capabilities & 0x80)) throw new Error('当前固件不含 NFC，请烧录独立 NT082C 试验程序');
+  const n = Number(address);
+  if (!Number.isInteger(n) || n < 8 || n > 119) throw new Error('I²C 7 位地址须为十进制 8–119');
+  return protocol.command(1, new Uint8Array([0xe8, enabled ? 1 : 0, n]));
+}
+
 async function clockMode(face = 'digital', interval = 5, dateText, timeText, batteryVisible, refreshMode = 'full') {
   ensureReady();
   const current = protocol.getStatus();
+  if (current && (current.capabilities & 0x40)) {
+    const now = new Date(), pad = n => String(n).padStart(2, '0');
+    return applyClockDisplay(face, interval, batteryVisible == null ? current.batteryVisible !== false : batteryVisible,
+      refreshMode, current.tempOffsetTenths || 0,
+      dateText || `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`,
+      timeText || `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`);
+  }
   const configureClock = supportsClockConfiguration()
     ? () => setClockFace(face, interval, batteryVisible, refreshMode)
     : () => Promise.resolve();
@@ -192,5 +221,5 @@ async function raw(channel, text) {
 
 module.exports = {
   imageMode, clockMode, setClockFace, supportsClockConfiguration, disableClockMode, disableImageMode, syncTime, setTime, clear, fullRefresh, raw,
-  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes, setTemperatureOffset, setBatteryVisible
+  localTimeCommand, customTimeCommand, parseDateTime, hexToBytes, setTemperatureOffset, setBatteryVisible, applyClockDisplay, setNfcEnabled
 };

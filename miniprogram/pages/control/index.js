@@ -66,7 +66,12 @@ Page({
     tempOffsetDirty: false,
     batteryVisible: true,
     batteryVisibleDirty: false,
-    batteryLevel: 0
+    batteryLevel: 0,
+    nfcSupported: false,
+    nfcEnabledDraft: false,
+    nfcAddressDraft: '87',
+    nfcDirty: false,
+    nfcStatusText: '需要独立 NT082C 试验固件'
   },
 
   onLoad() {
@@ -82,7 +87,11 @@ Page({
           ...(!this.data.clockSettingsDirty ? { clockRefreshMode: event.status.clockRefreshMode || 'full' } : {}),
           operationSeconds: event.status.seconds || 0,
           operationDetail: event.busy ? `${labels[event.status.state] || '设备处理中'} · ${event.status.seconds || 0} 秒` : '',
-          batteryLevel: event.status.batteryLevel == null ? this.data.batteryLevel : event.status.batteryLevel
+          batteryLevel: event.status.batteryLevel == null ? this.data.batteryLevel : event.status.batteryLevel,
+          nfcSupported: event.status.nfcSupported,
+          nfcStatusText: event.status.nfcSupported ? (['接触接口关闭','待探测','地址有应答，未验证芯片身份','I²C 无应答','总线超时'][event.status.nfcState] || '未知状态') : '当前固件不含 NFC',
+          ...(!this.data.nfcDirty ? { nfcEnabledDraft: event.status.nfcEnabled, nfcAddressDraft: String(event.status.nfcAddress || 87) } : {}),
+          ...(!this.data.clockSettingsDirty && event.status.clockFace ? {clockFace: event.status.clockFace} : {})
         });
       } else if (event.type === 'idle') {
         this.setData({ operationDetail: '', operationSeconds: 0 });
@@ -111,6 +120,10 @@ Page({
       onlineSyncMinutes: online.intervalMinutes
     }, fields));
     const deviceStatus = protocol.getStatus();
+    if (deviceStatus) this.setData({nfcSupported: deviceStatus.nfcSupported, nfcEnabledDraft: deviceStatus.nfcEnabled,
+      nfcAddressDraft: String(deviceStatus.nfcAddress || 87), nfcDirty: false,
+      nfcStatusText: deviceStatus.nfcSupported ? (['接触接口关闭','待探测','地址有应答，未验证芯片身份','I²C 无应答','总线超时'][deviceStatus.nfcState] || '未知状态') : '当前固件不含 NFC',
+      ...(deviceStatus.clockFace ? {clockFace:deviceStatus.clockFace} : {})});
     if (deviceStatus && deviceStatus.tempOffsetTenths != null) {
       this.setData({
         tempOffsetDraft: (deviceStatus.tempOffsetTenths / 10).toFixed(1),
@@ -144,6 +157,16 @@ Page({
       this.setData({ busy: false, connected: ble.isConnected(), clockModeActive: modeState.isClock() });
     }
     return succeeded;
+  },
+
+  toggleNfc(event) { this.setData({nfcEnabledDraft:event.detail.value,nfcDirty:true}); },
+  inputNfcAddress(event) { this.setData({nfcAddressDraft:event.detail.value,nfcDirty:true}); },
+  applyNfcSettings() {
+    return this.run('正在应用 NFC 通信开关并探测', async () => {
+      const status=await control.setNfcEnabled(this.data.nfcEnabledDraft,this.data.nfcAddressDraft);
+      this.setData({nfcDirty:false,nfcEnabledDraft:status.nfcEnabled,
+        nfcStatusText:['接触接口关闭','待探测','地址有应答，未验证芯片身份','I²C 无应答','总线超时'][status.nfcState] || '未知状态'});
+    });
   },
 
   toggleClockMode(event) {
@@ -211,6 +234,13 @@ Page({
     const shouldSetTime = this.data.clockTimeDirty;
     const label = enableClock ? '正在应用显示参数' : '正在关闭时钟模式';
     return this.run(label, async () => {
+      if (enableClock && ((protocol.getStatus() || {}).capabilities & 0x40)) {
+        const offset = temperatureTenths == null ? ((protocol.getStatus() || {}).tempOffsetTenths || 0) : temperatureTenths;
+        const withTime = shouldSetTime || !modeState.isClock();
+        await control.applyClockDisplay(this.data.clockFace, minutes, this.data.batteryVisible, this.data.clockRefreshMode,
+          offset, withTime ? this.data.dateText : null, withTime ? this.data.timeText : null);
+        return;
+      }
       if (temperatureTenths != null) await control.setTemperatureOffset(temperatureTenths);
       if (!hasClockChanges) {
         if (modeState.isClock()) await control.fullRefresh();

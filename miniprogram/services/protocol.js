@@ -5,7 +5,8 @@ const reasons = [
   '', '设备正忙，指令未执行', '指令或图片数据无效',
   '屏幕初始化失败，请检查屏幕型号、供电和接线',
   '屏幕 BUSY 超时', '图片解码失败', '图片上传超时',
-  '未检测到屏幕 BUSY，请检查接线', '图片图层校验失败', 'Flash 保存或回读校验失败，请重新上传'
+  '未检测到屏幕 BUSY，请检查接线', '图片图层校验失败', 'Flash 保存或回读校验失败，请重新上传',
+  '屏幕正在刷新，请稍后重试', 'NFC I²C 无应答，请检查地址、供电及接线', 'NFC I²C 总线超时，接口已关闭'
 ];
 
 let sequence = 1 + Math.floor(Math.random() * 60000);
@@ -80,7 +81,13 @@ function receive(buffer) {
     clockIntervalMinutes: bytes.length >= 28 ? bytes[26] | bytes[27] << 8 : null,
     clockNow: bytes.length >= 37 ? (bytes[28] | bytes[29] << 8 | bytes[30] << 16 | bytes[31] << 24) >>> 0 : null,
     clockLastRefresh: bytes.length >= 37 ? (bytes[32] | bytes[33] << 8 | bytes[34] << 16 | bytes[35] << 24) >>> 0 : null,
-    clockRuntimeFlags: bytes.length >= 37 ? bytes[36] : 0
+    clockRuntimeFlags: bytes.length >= 37 ? bytes[36] : 0,
+    clockFace: bytes.length >= 38 ? (bytes[37] ? 'analog' : 'digital') : null,
+    nfcSupported: bytes.length >= 42 && !!(bytes[22] & 0x80),
+    nfcEnabled: bytes.length >= 42 ? !!bytes[38] : false,
+    nfcState: bytes.length >= 42 ? bytes[39] : 0,
+    nfcAddress: bytes.length >= 42 ? bytes[40] : 87,
+    nfcIrq: bytes.length >= 42 ? bytes[41] : 0
   };
   const signature = Array.prototype.map.call(bytes, value => value.toString(16).padStart(2, '0')).join(' ');
   if (!lastStatusSignature) {
@@ -180,7 +187,7 @@ function sendCommand(channel, body) {
   packet.set([6, token & 255, token >> 8, channel]);
   packet.set(body, 4);
   return new Promise((resolve, reject) => {
-    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xe6 || body[0] === 0xdd;
+    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xe6 || body[0] === 0xe7 || body[0] === 0xfa || body[0] === 0xdd;
     const timer = setTimeout(() => {
       if (!pending || pending.token !== token) return;
       pending = null;

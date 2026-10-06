@@ -55,6 +55,14 @@
   </view>
 
   <view class="panel">
+    <view class="panel-title">NFC 接触接口试验</view>
+    <view class="muted">{{nfcStatusText}}</view>
+    <view class="refresh-setting"><view><view class="setting-title">启用 MCU 与 NT082C 通信</view><view class="muted">不等于关闭无源 RF 标签；内容读写尚未实现</view></view><switch color="#927cff" checked="{{nfcEnabledDraft}}" disabled="{{!connected || busy || !nfcSupported}}" bindchange="toggleNfc"/></view>
+    <view class="refresh-setting"><view class="setting-title">I²C 7 位地址（十进制）</view><input type="number" value="{{nfcAddressDraft}}" disabled="{{busy || !nfcSupported}}" bindinput="inputNfcAddress"/></view>
+    <button class="tech-btn ghost" disabled="{{!connected || busy || !nfcSupported}}" bindtap="applyNfcSettings">应用 NFC 通信开关并探测</button>
+    <view class="muted" wx:if="{{!nfcSupported}}">请使用独立 NT082C 试验固件。</view>
+  </view>
+  <view class="panel">
     <view class="panel-title">高级指令</view>
     <picker mode="selector" range="{{channels}}" value="{{channel}}" bindchange="setChannel">
       <view class="picker-field">通道：{{channelLabel}} <text>⌄</text></view>
