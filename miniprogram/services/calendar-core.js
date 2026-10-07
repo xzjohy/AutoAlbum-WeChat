@@ -22,9 +22,12 @@
     ctx.font='bold 25px sans-serif';ctx.fillText(m.year+'年'+m.month+'月'+m.day+'日',10,31);
     ctx.font='14px sans-serif';ctx.fillText(m.weekday,10,53);ctx.fillText(m.lunar,70,53);
     ctx.textAlign='right';ctx.font='15px sans-serif';ctx.fillText(m.weather,390,20);ctx.font='13px sans-serif';ctx.fillText(m.temperature+'°C | '+m.humidity+'%',390,40);ctx.fillText(m.place.slice(0,9),390,57);
-    for(let col=0;col<7;col++){ctx.fillStyle=(col===0||col===6)?'#f00':'#000';ctx.fillRect(col*400/7,66,400/7,23);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='15px sans-serif';ctx.fillText(['日','一','二','三','四','五','六'][col],(col+.5)*400/7,83);}
+    // Snap grid boundaries and glyph positions to native screen pixels.
+    // Preserve the original fonts and sizes; no resize or stroke dilation.
+    const edge=col=>Math.round(col*400/7),center=col=>Math.round((edge(col)+edge(col+1))/2);
+    for(let col=0;col<7;col++){ctx.fillStyle=(col===0||col===6)?'#f00':'#000';ctx.fillRect(edge(col),66,edge(col+1)-edge(col),23);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='15px sans-serif';ctx.fillText(['日','一','二','三','四','五','六'][col],center(col),83);}
     const rows=Math.ceil((m.cells[0].slot+m.cells.length)/7), height=205/rows;
-    m.cells.forEach(cell=>{const col=cell.slot%7,row=Math.floor(cell.slot/7),x=(col+.5)*400/7,y=90+row*height;
+    m.cells.forEach(cell=>{const col=cell.slot%7,row=Math.floor(cell.slot/7),x=center(col),y=90+Math.round(row*height);
       ctx.fillStyle=(col===0||col===6)?'#f00':'#000';ctx.textAlign='center';ctx.font='bold 21px sans-serif';ctx.fillText(String(cell.day),x,y+23);
       ctx.font='12px sans-serif';ctx.fillText(cell.lunar,x,y+38);
       if(cell.day===m.day){ctx.strokeStyle='#f00';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y+16,16,0,Math.PI*2);ctx.stroke();}
