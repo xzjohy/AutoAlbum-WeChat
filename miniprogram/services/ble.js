@@ -134,11 +134,14 @@ async function findCharacteristic(targetServiceUUID, targetCharacteristicUUID) {
 }
 
 async function negotiateMTU(id) {
+  mtu = 23;
   try {
-    // Keep the baseline ATT MTU during connection discovery; no optional renegotiation.
-    mtu = 23;
+    // E5 status is up to 43 bytes: MTU 23 cannot carry it. Request only
+    // 64 here; OTA retains its conservative, independently bounded writes.
+    if (typeof wx.setBLEMTU === 'function') await p(wx.setBLEMTU, {deviceId:id,mtu:64});
   } catch (error) {
-    log.warn('BLE', 'MTU request skipped ' + errorText(error));
+    // iOS negotiates automatically and may not expose this Android API.
+    log.warn('BLE', 'status MTU negotiation unavailable ' + errorText(error));
   }
   try {
     const result = await p(wx.getBLEMTU, { deviceId: id, writeType: cfg.writeType });
@@ -177,6 +180,9 @@ async function connect(id) {
         const found=await discoverCharacteristic(id);check();
         deviceId=id;serviceId=found.serviceId;characteristicId=found.characteristicId;
         await p(wx.notifyBLECharacteristicValueChange,{deviceId,serviceId,characteristicId,state:true});
+        // Some Android stacks complete CCC subscription before notifications
+        // and the next write are actually ready.
+        await new Promise(resolve=>setTimeout(resolve,300));
         check();log.info('BLE','connected '+id);return;
       } catch(error) {
         try {await p(wx.closeBLEConnection,{deviceId:id});}catch(ignored){}

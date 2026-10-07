@@ -45,6 +45,7 @@ function clearState(message) {
   lastStatusSignature = '';
   if (hello) {
     clearTimeout(hello.timer);
+    clearInterval(hello.queryTimer);
     hello.reject(new Error(message));
     hello = null;
   }
@@ -64,7 +65,10 @@ function receive(buffer) {
     emitOperation('nfc-report', { report });
     return;
   }
-  if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] < 1) return;
+  if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] < 1) {
+    if (hello) log.warn('EPD', `握手期间收到非状态通知：${bytes.length} 字节，包头 ${Array.from(bytes.slice(0, 8)).map(n=>n.toString(16).padStart(2,'0')).join(' ')}`);
+    return;
+  }
   const status = {
     token: bytes[2] | bytes[3] << 8,
     state: bytes[4],
@@ -111,6 +115,7 @@ function receive(buffer) {
     const current = hello;
     hello = null;
     clearTimeout(current.timer);
+    clearInterval(current.queryTimer);
     ready = true;
     sequence = (status.token + 1) % 65535 || 1;
     current.resolve(status);
@@ -129,22 +134,40 @@ function receive(buffer) {
 }
 
 async function start(listener) {
+  clearState('正在重新初始化设备状态');
   statusListener = listener || null;
   if (removeValueListener) removeValueListener();
   if (removeDisconnectListener) removeDisconnectListener();
   removeValueListener = ble.onValue(receive);
   removeDisconnectListener = ble.onDisconnect(() => clearState('蓝牙连接已断开'));
+  let queries = 0;
   const response = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
+      if (!hello) return;
+      clearInterval(hello.queryTimer);
       hello = null;
-      reject(new Error('未收到设备状态回复，请确认已烧录配套固件'));
-    }, 5000);
+      const mtu = typeof ble.getRawWriteSize === 'function' ? ble.getRawWriteSize() + 3 : '未知';
+      log.warn('EPD', `状态握手超时：查询 ${queries} 次，MTU ${mtu}`);
+      reject(new Error(`蓝牙已连接，但未收到设备状态回复（MTU ${mtu}）。请关闭其他蓝牙客户端后重试；可在日志页查看状态握手记录。`));
+    }, 12000);
     hello = { resolve, reject, timer };
   });
+  const query = () => {
+    if (!hello || queries >= 4) return;
+    queries++;
+    log.info('EPD', `请求设备状态 ${queries}/4`);
+    ble.write(new Uint8Array([5])).catch(error => {
+      if (!hello) return;
+      log.warn('EPD', `状态查询写入失败：${error.errMsg || error.message || error}`);
+      if (error.errCode === 10008) return; // Only retry this read-only query.
+      clearState(error.errMsg || error.message || String(error));
+    });
+  };
+  hello.queryTimer = setInterval(query, 2500);
+  query();
   let status;
   try {
-    const result = await Promise.all([ble.write(new Uint8Array([5])), response]);
-    status = result[1];
+    status = await response;
   } catch (error) {
     clearState(error.message || String(error));
     throw error;
