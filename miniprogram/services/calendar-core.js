@@ -16,7 +16,9 @@
     const w=weather || {};
     return {year,month,day,date:dateKey(date),weekday:'星期'+['日','一','二','三','四','五','六'][date.getDay()],lunar:lunar.getYearInGanZhi()+'年 '+lunar.getMonthInChinese()+'月'+lunar.getDayInChinese(),cells,place:place||'',weather:w.weather_code == null ? '天气未获取' : weatherLabel(w.weather_code),temperature:w.temperature_2m == null ? '--' : Math.round(w.temperature_2m),humidity:w.relative_humidity_2m == null ? '--' : Math.round(w.relative_humidity_2m)};
   }
-  function signature(m) { return JSON.stringify([m.date,m.place,m.weather,m.temperature,m.humidity]); }
+  // Older saved images may have lost light glyph strokes. Prompt a manual
+  // regeneration once, even if date and weather have not changed.
+  function signature(m) { return JSON.stringify([m.date,m.place,m.weather,m.temperature,m.humidity,'stroke-preserve-184-v1']); }
   function draw(ctx,m) {
     ctx.fillStyle='#fff';ctx.fillRect(0,0,400,300); ctx.fillStyle='#000';ctx.textAlign='left';
     ctx.font='bold 25px sans-serif';ctx.fillText(m.year+'年'+m.month+'月'+m.day+'日',10,31);
