@@ -5,6 +5,9 @@ let deviceId = '';
 let serviceId = '';
 let characteristicId = '';
 let mtu = 23;
+let connecting = false;
+let connectingId = '';
+let connectionLost = false;
 let scanCallback = null;
 let discoveryQueue = Promise.resolve();
 let listenersRegistered = false;
@@ -49,6 +52,7 @@ function registerListeners() {
     });
   });
   wx.onBLEConnectionStateChange(result => {
+    if(result.deviceId === connectingId && !result.connected) connectionLost = true;
     if (result.deviceId !== deviceId || result.connected) return;
     const disconnectedId = deviceId;
     deviceId = '';
@@ -145,24 +149,33 @@ async function negotiateMTU(id) {
 }
 
 async function connect(id) {
-  await stopScan();
-  await open();
-  if (deviceId && deviceId !== id) await disconnect();
-  await p(wx.createBLEConnection, { deviceId: id, timeout: 10000 });
+  if(connecting) throw new Error('正在连接，请等待');
+  connecting = true;
   try {
-    await negotiateMTU(id);
-    const found = await discoverCharacteristic(id);
-    deviceId = id;
-    serviceId = found.serviceId;
-    characteristicId = found.characteristicId;
-    await p(wx.notifyBLECharacteristicValueChange, {
-      deviceId, serviceId, characteristicId, state: true
-    });
-    log.info('BLE', 'connected ' + id);
-  } catch (error) {
-    try { await p(wx.closeBLEConnection, { deviceId: id }); } catch (ignored) {}
-    throw error;
-  }
+    await stopScan();
+    await open();
+    if(deviceId) await disconnect();
+    for(let attempt=0;attempt<2;attempt++) {
+      connectingId=id; connectionLost=false; mtu=23;
+      const check=()=>{if(connectionLost)throw new Error('GATT disconnected during discovery');};
+      try {
+        await p(wx.createBLEConnection, {deviceId:id,timeout:10000});
+        check();
+        await negotiateMTU(id);check();
+        const found=await discoverCharacteristic(id);check();
+        deviceId=id;serviceId=found.serviceId;characteristicId=found.characteristicId;
+        await p(wx.notifyBLECharacteristicValueChange,{deviceId,serviceId,characteristicId,state:true});
+        check();log.info('BLE','connected '+id);return;
+      } catch(error) {
+        try {await p(wx.closeBLEConnection,{deviceId:id});}catch(ignored){}
+        deviceId='';serviceId='';characteristicId='';
+        const transient=[10003,10006,10012].includes(error.errCode)||/147|GATT|disconnect|timeout|connection fail/i.test(errorText(error));
+        if(attempt||!transient)throw error;
+        log.warn('BLE','retry after connection failure; release other phone/web clients');
+        connectingId='';await new Promise(resolve=>setTimeout(resolve,1500));
+      }
+    }
+  } finally {connecting=false;connectingId='';}
 }
 
 async function disconnect() {

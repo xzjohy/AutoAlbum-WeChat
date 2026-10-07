@@ -6,7 +6,8 @@ const reasons = [
   '屏幕初始化失败，请检查屏幕型号、供电和接线',
   '屏幕 BUSY 超时', '图片解码失败', '图片上传超时',
   '未检测到屏幕 BUSY，请检查接线', '图片图层校验失败', 'Flash 保存或回读校验失败，请重新上传',
-  '屏幕正在刷新，请稍后重试', 'NFC I²C 无应答，请检查地址、供电及接线', 'NFC I²C 总线超时，接口已关闭'
+  '屏幕正在刷新，请稍后重试', 'NFC I²C 无应答，请检查地址、供电及接线', 'NFC I²C 总线超时，接口已关闭',
+  'NFC 操作已取消', 'NFC 数据回读校验失败', 'NFC 接口未启用'
 ];
 
 let sequence = 1 + Math.floor(Math.random() * 60000);
@@ -23,6 +24,7 @@ let lastStatus = null;
 const idleWaiters = [];
 let lastStatusSignature = '';
 const operationListeners = [];
+const nfcReportListeners = [];
 let commandQueue = Promise.resolve();
 
 function emitOperation(type, detail = {}) {
@@ -56,6 +58,12 @@ function clearState(message) {
 
 function receive(buffer) {
   const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 8 && bytes[0] === 0xec && bytes[1] === 1) {
+    const report = { token: bytes[2] | bytes[3] << 8, phase: bytes[4], offset: bytes[5] | bytes[6] << 8, data: bytes.slice(8, 8 + bytes[7]) };
+    nfcReportListeners.slice().forEach(listener => listener(report));
+    emitOperation('nfc-report', { report });
+    return;
+  }
   if (bytes.length < 12 || bytes[0] !== 0xe5 || bytes[1] < 1) return;
   const status = {
     token: bytes[2] | bytes[3] << 8,
@@ -187,7 +195,7 @@ function sendCommand(channel, body) {
   packet.set([6, token & 255, token >> 8, channel]);
   packet.set(body, 4);
   return new Promise((resolve, reject) => {
-    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xe6 || body[0] === 0xe7 || body[0] === 0xfa || body[0] === 0xdd;
+    const isLongOperation = body[0] === 1 || body[0] === 0xe1 || body[0] === 0xe2 || body[0] === 0xe3 || body[0] === 0xe6 || body[0] === 0xe7 || body[0] === 0xe9 || body[0] === 0xea || body[0] === 0xfa || body[0] === 0xdd;
     const timer = setTimeout(() => {
       if (!pending || pending.token !== token) return;
       pending = null;
@@ -224,10 +232,16 @@ function requestStatus() {
   });
 }
 
+function cancelNfc() {
+  if (!ready) return Promise.reject(new Error('请先连接设备'));
+  return ble.write(new Uint8Array([0xeb]));
+}
+
 module.exports = {
   start,
   command,
   requestStatus,
+  cancelNfc,
   waitForIdle,
   cancelWaiting,
   close: () => clearState('连接已关闭'),
@@ -241,6 +255,13 @@ module.exports = {
     return () => {
       const index = operationListeners.indexOf(listener);
       if (index >= 0) operationListeners.splice(index, 1);
+    };
+  },
+  onNfcReport: listener => {
+    if (!nfcReportListeners.includes(listener)) nfcReportListeners.push(listener);
+    return () => {
+      const index = nfcReportListeners.indexOf(listener);
+      if (index >= 0) nfcReportListeners.splice(index, 1);
     };
   },
   onStatus: listener => {

@@ -22,5 +22,6 @@
   <button class="tech-btn danger" disabled="{{!connected || !file || updating}}" loading="{{updating}}" bindtap="updateFirmware">
     {{updating ? '升级进行中，请勿断电' : '开始安全升级'}}
   </button>
+  <button wx:if="{{updating}}" class="tech-btn ghost" disabled="{{progress >= 98}}" bindtap="cancelUpdate">{{progress >= 98 ? '正在安装，无法取消' : '取消上传并断开'}}</button>
   <view class="warning">升级会先写入备用区域并核对完整校验值。最终安装及重启期间请勿断电。</view>
 </view>

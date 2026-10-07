@@ -3,6 +3,7 @@ const control = require('../../services/control');
 const modeState = require('../../services/mode');
 const onlineClock = require('../../services/online-clock');
 const protocol = require('../../services/protocol');
+const nfc = require('../../services/nfc');
 
 function pad(value) { return String(value).padStart(2, '0'); }
 
@@ -71,7 +72,11 @@ Page({
     nfcEnabledDraft: false,
     nfcAddressDraft: '87',
     nfcDirty: false,
-    nfcStatusText: '需要独立 NT082C 试验固件'
+    nfcStatusText: '需要 NFC 2.4.14 或更高版本',
+    nfcWriteMode: 'text',
+    nfcWriteDraft: '',
+    nfcReadResult: '',
+    nfcDiagnosticResult: ''
   },
 
   onLoad() {
@@ -166,6 +171,33 @@ Page({
       const status=await control.setNfcEnabled(this.data.nfcEnabledDraft,this.data.nfcAddressDraft);
       this.setData({nfcDirty:false,nfcEnabledDraft:status.nfcEnabled,
         nfcStatusText:['接触接口关闭','待探测','地址有应答，未验证芯片身份','I²C 无应答','总线超时'][status.nfcState] || '未知状态'});
+    });
+  },
+  selectNfcWriteMode(event) { this.setData({ nfcWriteMode: event.currentTarget.dataset.mode }); },
+  inputNfcWrite(event) { this.setData({ nfcWriteDraft: event.detail.value }); },
+  readNfc() {
+    return this.run('正在读取 NFC NDEF', async () => {
+      const value = await nfc.read();
+      this.setData({ nfcReadResult: value.text ? `${value.type}：${value.text}` : `${value.type}：${value.hex}` });
+    });
+  },
+  diagnoseNfc() {
+    return this.run('正在读取 NFC 诊断寄存器', async () => {
+      this.setData({ nfcDiagnosticResult: await nfc.diagnostic() });
+    });
+  },
+  powerTestNfc() { return this.run('正在执行 NFC 供电与 RF 自检', () => nfc.powerTest()); },
+  writeNfc() {
+    const value = String(this.data.nfcWriteDraft || '').trim();
+    if (!value) return wx.showToast({ title: '请输入要写入的内容', icon: 'none' });
+    if (this.data.nfcWriteMode === 'url' && !/^https?:\/\//i.test(value)) return wx.showToast({ title: 'URL 需以 http:// 或 https:// 开头', icon: 'none' });
+    const action = this.data.nfcWriteMode === 'url' ? () => nfc.writeUrl(value) : () => nfc.writeText(value);
+    return this.run('正在写入 NFC NDEF', action);
+  },
+  cancelNfc() {
+    return this.run('正在取消 NFC 操作', async () => {
+      await nfc.cancel();
+      await protocol.requestStatus();
     });
   },
 

@@ -55,12 +55,23 @@
   </view>
 
   <view class="panel">
-    <view class="panel-title">NFC 接触接口试验</view>
+    <view class="panel-title">NFC 控制与调试</view>
     <view class="muted">{{nfcStatusText}}</view>
-    <view class="refresh-setting"><view><view class="setting-title">启用 MCU 与 NT082C 通信</view><view class="muted">不等于关闭无源 RF 标签；内容读写尚未实现</view></view><switch color="#927cff" checked="{{nfcEnabledDraft}}" disabled="{{!connected || busy || !nfcSupported}}" bindchange="toggleNfc"/></view>
+    <view class="refresh-setting"><view><view class="setting-title">启用 MCU 与 NT082C 通信</view><view class="muted">接触接口和 RF 服务会保持工作</view></view><switch color="#927cff" checked="{{nfcEnabledDraft}}" disabled="{{!connected || busy || !nfcSupported}}" bindchange="toggleNfc"/></view>
     <view class="refresh-setting"><view class="setting-title">I²C 7 位地址（十进制）</view><input type="number" value="{{nfcAddressDraft}}" disabled="{{busy || !nfcSupported}}" bindinput="inputNfcAddress"/></view>
     <button class="tech-btn ghost" disabled="{{!connected || busy || !nfcSupported}}" bindtap="applyNfcSettings">应用 NFC 通信开关并探测</button>
-    <view class="muted" wx:if="{{!nfcSupported}}">请使用独立 NT082C 试验固件。</view>
+    <view class="nfc-actions">
+      <button class="mini-action" disabled="{{!connected || busy || !nfcSupported}}" bindtap="readNfc">读取 NDEF</button>
+      <button class="mini-action" disabled="{{!connected || busy || !nfcSupported}}" bindtap="diagnoseNfc">读取诊断</button>
+      <button class="mini-action" disabled="{{!connected || busy || !nfcSupported}}" bindtap="powerTestNfc">供电/RF 自检</button>
+      <button class="mini-action danger" disabled="{{!connected || busy || !nfcSupported}}" bindtap="cancelNfc">取消 NFC 操作</button>
+    </view>
+    <view class="face-switch nfc-type"><button class="{{nfcWriteMode === 'text' ? 'selected' : ''}}" data-mode="text" bindtap="selectNfcWriteMode">写入文本</button><button class="{{nfcWriteMode === 'url' ? 'selected' : ''}}" data-mode="url" bindtap="selectNfcWriteMode">写入 URL</button></view>
+    <input class="tech-input" maxlength="120" value="{{nfcWriteDraft}}" disabled="{{busy || !nfcSupported}}" bindinput="inputNfcWrite" placeholder="{{nfcWriteMode === 'url' ? 'https://example.com' : '要写入 NFC 的文本'}}"/>
+    <button class="tech-btn ghost" disabled="{{!connected || busy || !nfcSupported}}" bindtap="writeNfc">写入 NDEF</button>
+    <view class="nfc-result" wx:if="{{nfcReadResult}}">读取结果：{{nfcReadResult}}</view>
+    <view class="nfc-result mono" wx:if="{{nfcDiagnosticResult}}">诊断：{{nfcDiagnosticResult}}</view>
+    <view class="muted" wx:if="{{!nfcSupported}}">请烧录 NFC 2.4.14 或更高版本固件。</view>
   </view>
   <view class="panel">
     <view class="panel-title">高级指令</view>

@@ -4,11 +4,12 @@ const KEY = 'autoalbum_idle_disconnect_minutes';
 
 function normalize(value) {
   const parsed = parseInt(value, 10);
-  return Math.max(1, Math.min(999, Number.isFinite(parsed) ? parsed : 1));
+  return Math.max(0, Math.min(999, Number.isFinite(parsed) ? parsed : 1));
 }
 
 function get() {
-  return normalize(wx.getStorageSync(KEY));
+  const saved = wx.getStorageSync(KEY);
+  return saved === '' || saved === undefined || saved === null ? 1 : normalize(saved);
 }
 
 async function apply(minutes) {

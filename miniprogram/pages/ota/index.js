@@ -25,10 +25,12 @@ Page({
     file: null,
     updating: false,
     progress: 0,
-    stage: '请选择 .bin 固件'
+    stage: '请选择 .bin 固件（推荐配套2.4.18）'
   },
 
   onShow() { this.setData({ connected: ble.isConnected() }); },
+
+  async cancelUpdate() { await ota.cancel(); },
 
   chooseFirmware() {
     if (this.data.updating) return;
@@ -55,13 +57,13 @@ Page({
       await ota.update(buffer, state => this.setData(state));
       wx.showModal({
         title: '升级指令已发送',
-        content: '墨水屏正在复制固件并重启。请等待约 30 秒，然后重新扫描连接。',
+        content: '墨水屏正在复制固件并重启。请等待约 30 秒，然后重新扫描连接并读取固件版本。激活指令发送完成不代表已验证升级成功。',
         showCancel: false
       });
     } catch (error) {
-      this.setData({ stage: '升级失败，请重新连接后重试' });
+      this.setData({ stage: error.code === 'OTA_CANCELLED' ? '已取消，请重新连接后从头上传' : '升级失败，请重新连接后从头上传' });
       await ble.disconnect().catch(() => {});
-      wx.showModal({ title: 'OTA 升级失败', content: error.message || error.errMsg || String(error), showCancel: false });
+      wx.showModal({ title: error.code === 'OTA_CANCELLED' ? '已取消升级' : 'OTA 升级失败', content: error.message || error.errMsg || String(error), showCancel: false });
     } finally {
       this.setData({ updating: false, connected: ble.isConnected() });
     }
