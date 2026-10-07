@@ -60,7 +60,7 @@ async function upload(item, index, total, onProgress, monochrome) {
   ensureNotCancelled();
   log.info('SYNC', `processing ${index + 1}/${total}`);
   onProgress && onProgress({ index, total, stage: '正在处理图片', overall: index / total });
-  const planes = await image.convert(item.path, {
+  const planes = item.planes || await image.convert(item.path, {
     grayscale: item.grayscale == null ? 0 : item.grayscale,
     monochrome
   });
@@ -88,7 +88,17 @@ async function upload(item, index, total, onProgress, monochrome) {
     8, blackCrc >> 8, blackCrc & 255, redCrc >> 8, redCrc & 255
   ]));
   onProgress && onProgress({ index, total, stage: '墨水屏正在刷新', fileProgress: 0.98, overall: (index + 0.98) / total });
-  const completed = await protocol.command(0, new Uint8Array([1, monochrome ? 2 : 1]));
+  let completed;
+  try {
+    completed = await protocol.command(0, new Uint8Array([1, monochrome ? 2 : 1]));
+  } catch (error) {
+    // The device accepted both complete planes and verified their CRCs.
+    // Do not repeat a refresh with an unknown outcome or report it as success.
+    error.message = '黑白/红色图层校验已通过，屏幕刷新失败：' + error.message;
+    error.stage = 'refresh';
+    error.deviceStatus = protocol.getStatus();
+    throw error;
+  }
   if (completed.scene !== 0) throw new Error('设备刷新模式异常');
   progress(1);
   log.info('SYNC', `completed ${index + 1}/${total}`);

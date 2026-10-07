@@ -30,5 +30,20 @@
       if(cell.day===m.day){ctx.strokeStyle='#f00';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y+16,16,0,Math.PI*2);ctx.stroke();}
     });
   }
-  return {model,draw,signature,dateKey,weatherLabel};
+  // Text is quantized without error diffusion: one solid pixel stays one solid pixel.
+  function packPixels(rgba,width=400,height=300,monochrome=false) {
+    if(width!==400||height!==300||!rgba||rgba.length!==width*height*4)throw new Error('日历必须为400×300像素');
+    const black=new Uint8Array(15000),red=new Uint8Array(15000),pixels=new Uint8ClampedArray(rgba.length);black.fill(255);
+    for(let n=0;n<width*height;n++) {
+      const i=n*4,alpha=rgba[i+3]/255,r=rgba[i]*alpha+255*(1-alpha),g=rgba[i+1]*alpha+255*(1-alpha),b=rgba[i+2]*alpha+255*(1-alpha);
+      const blackDistance=r*r+g*g+b*b,whiteDistance=(255-r)**2+(255-g)**2+(255-b)**2,redDistance=(255-r)**2+g*g+b*b;
+      const isRed=!monochrome && redDistance<blackDistance && redDistance<whiteDistance;
+      const isBlack=!isRed && blackDistance<whiteDistance;
+      const mask=128>>(n&7),offset=n>>3;
+      if(isRed)red[offset]|=mask;else if(isBlack)black[offset]&=~mask;
+      pixels[i]=isRed||!isBlack?255:0;pixels[i+1]=pixels[i+2]=isRed||isBlack?0:255;pixels[i+3]=255;
+    }
+    return {black,red,pixels};
+  }
+  return {model,draw,packPixels,signature,dateKey,weatherLabel};
 });
