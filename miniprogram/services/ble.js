@@ -149,6 +149,17 @@ async function negotiateMTU(id) {
   log.info('BLE', 'MTU ' + mtu);
 }
 
+/* Negotiate only on explicit OTA start, keeping normal connection discovery unchanged. */
+async function negotiateOtaMTU() {
+  if (!deviceId) throw new Error('蓝牙未连接');
+  try { await p(wx.setBLEMTU, {deviceId, mtu: cfg.preferredMTU}); }
+  catch (error) { log.warn('OTA', 'MTU negotiation unavailable; use confirmed capacity'); }
+  try {
+    const result = await p(wx.getBLEMTU, {deviceId, writeType: cfg.writeType});
+    if (result.mtu) mtu = result.mtu;
+  } catch (error) { /* Firmware budget is the final authority. */ }
+}
+
 async function connect(id) {
   if(connecting) throw new Error('正在连接，请等待');
   connecting = true;
@@ -266,6 +277,7 @@ module.exports = {
   write,
   findCharacteristic,
   enableNotifications,
+  negotiateOtaMTU,
   writeCharacteristic,
   onValue: listener => addUnique(valueListeners, listener),
   onCharacteristicValue: (targetCharacteristicId, listener) => {
@@ -280,6 +292,6 @@ module.exports = {
   isConnected: () => !!deviceId,
   getDeviceId: () => deviceId,
   getImageChunkSize: () => Math.max(12, Math.min(236, mtu - 11)),
-  getRawWriteSize: () => Math.max(20, Math.min(244, mtu - 3)),
+  getRawWriteSize: () => Math.max(20, mtu - 3),
   isLikelyScreen: device => (device.name || device.localName || '').startsWith(cfg.deviceNamePrefix)
 };

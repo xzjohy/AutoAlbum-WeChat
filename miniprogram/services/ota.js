@@ -85,7 +85,21 @@ async function waitForChecksum(target, expected) {
 
 /* Query the firmware's effective ATT MTU. Missing reply from an older
  * firmware safely falls back without attempting an oversized staging write. */
-async function packetBudget(target) { return 19; }
+async function packetBudget(target) {
+  let remove, timer;
+  const reply = new Promise(resolve => {
+    timer = setTimeout(() => resolve(19), 1200);
+    remove = ble.onCharacteristicValue(target.characteristicId, buffer => {
+      const b = new Uint8Array(buffer);
+      if (b.length === 4 && b[0] === 8 && b[1] === 1) resolve(Math.max(19, b[2] | (b[3] << 8)));
+    });
+  });
+  try {
+    if (ble.negotiateOtaMTU) await operation(ble.negotiateOtaMTU());
+    await operation(ble.writeCharacteristic(target, new Uint8Array([8])));
+    return Math.min(await Promise.race([reply, active.aborted]), ble.getRawWriteSize() - 1, PAGE_SIZE);
+  } finally { clearTimeout(timer); if (remove) remove(); }
+}
 
 async function update(buffer, onProgress) {
   if (running) throw new Error('固件升级正在进行');
@@ -114,7 +128,7 @@ async function update(buffer, onProgress) {
     });
     await operation(ble.enableNotifications(target));
     protocol.close();
-    const chunkSize = 19; // Stable 20-byte ATT writes
+    const chunkSize = await packetBudget(target);
     log.info('OTA', `packet data ${chunkSize} bytes`);
     log.info('OTA', `start ${firmware.length} bytes checksum ${expected.toString(16)}`);
 

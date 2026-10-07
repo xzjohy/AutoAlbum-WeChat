@@ -10,7 +10,7 @@ async function scenario(mode){
  disconnect:async()=>{connected=false;disconnects.slice().forEach(f=>f());},
  writeCharacteristic:async(t,p)=>{
  packets.push(Array.from(p));
- if(p[0]===8&&mode!=='legacy')notifies.slice().forEach(f=>f(Uint8Array.from([8,1,mode==='small'?19:128,0]).buffer));
+ if(p[0]===8&&mode!=='legacy')notifies.slice().forEach(f=>f(Uint8Array.from([8,1,mode==='small'?19:243,0]).buffer));
  if(mode==='busy'&&p[0]===1)notifies.slice().forEach(f=>f(Uint8Array.from([0xe0,1]).buffer));
  if(mode==='cancel'&&p[0]===3&&!cancelled){cancelled=true;await service.cancel();}
  if(mode==='disconnect'&&p[0]===6)await ble.disconnect();
@@ -27,9 +27,10 @@ async function scenario(mode){
  if(completes)await result;
  else await assert.rejects(result,mode==='busy'?/正在刷新/:mode==='cancel'?/取消/:/断开/);
  assert(!service.isRunning());assert(!notifies.length&&!disconnects.length);
- assert(packets.every(p=>p.length<=(['small','legacy','client-small'].includes(mode)?20:129)));
+ assert(packets.every(p=>p.length<=(['small','legacy','client-small'].includes(mode)?20:244)));
  assert.equal(packets.some(p=>p[0]===7),completes);
  if(completes)assert.equal(progress.at(-1).progress,100);
+ if(mode==='success')assert.equal(Math.max(...packets.filter(p=>p[0]===3).map(p=>p.length)),244);
 }
 (async()=>{for(const mode of ['success','small','legacy','client-small','busy','cancel','disconnect'])await scenario(mode);
  console.log('PASS mini OTA: default-MTU chunks, busy rejection, cancel, checksum disconnect, install reboot, listener cleanup');

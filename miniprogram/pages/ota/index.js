@@ -25,7 +25,7 @@ Page({
     file: null,
     updating: false,
     progress: 0,
-    stage: '请选择 .bin 固件（推荐配套2.4.21）'
+    stage: '请选择 .bin 固件（推荐配套2.4.22）'
   },
 
   onShow() { this.setData({ connected: ble.isConnected() }); },
