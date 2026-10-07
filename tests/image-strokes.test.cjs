@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const image=require('../miniprogram/services/image'),calendar=require('../miniprogram/services/calendar-core');
+const rgba=new Uint8ClampedArray(400*300*4).fill(255);
+[[170,170,170,255],[255,170,170,255],[0,0,0,100],[255,0,0,100],[235,235,235,255],[255,255,255,255]].forEach((p,i)=>rgba.set(p,i*4));
+const reference=calendar.packPixels(rgba),packed=image.packPlanes(rgba,400,300);
+assert.deepEqual(packed.black,reference.black);assert.deepEqual(packed.red,reference.red);
+assert.equal(packed.black.length+packed.red.length,30000);
+const mono=image.packPlanes(rgba,400,300,true);assert(!mono.red.some(Boolean));assert.equal(mono.black[0]&64,0);
+const web=process.env.EPAPER_WEB_DIR||path.resolve(__dirname,'../../eink-gpt-clock-ui-v2/web_tools');
+const context={Uint8Array,Uint8ClampedArray};context.window=context;vm.createContext(context);
+for(const file of ['epaper-pixels.js','dithering.js'])vm.runInContext(fs.readFileSync(path.join(web,'js',file),'utf8'),context);
+const frame={data:new Uint8ClampedArray(rgba)},canvas={width:400,height:300,getContext:()=>({getImageData:()=>frame,putImageData(){}})};
+assert.deepEqual(Array.from(context.canvas2bytes(canvas)),Array.from(packed.black));
+assert.deepEqual(Array.from(context.canvas2bytes(canvas,'bwr')),Array.from(packed.red));
+context.normalizeEpaperCanvas(canvas);assert.deepEqual(frame.data,image.unpackPlanes(packed,400,300));
+let decodes=0;
+global.wx={createOffscreenCanvas:()=>({createImage:()=>{const i={width:400,height:300};Object.defineProperty(i,'src',{set(){decodes++;queueMicrotask(()=>i.onload());}});return i;},getContext:()=>({fillRect(){},drawImage(){},getImageData:()=>({data:new Uint8ClampedArray(rgba)})})}),canvasToTempFilePath:o=>o.success({tempFilePath:'converted.png'})};
+(async()=>{
+ const a=await image.convert('single'),b=await image.convert('carousel');assert.deepEqual(a,packed);assert.deepEqual(b,packed);
+ let previewFrame;const previewCanvas={getContext:()=>({createImageData:()=>({data:new Uint8ClampedArray(rgba.length)}),putImageData:f=>previewFrame=f.data})};
+ await image.preview('single',{},previewCanvas);assert.deepEqual(previewFrame,reference.pixels);assert.equal(decodes,2);
+ const compatible=await image.convert('mono',{monochrome:true});assert.deepEqual(compatible,mono);
+ const gray=await image.convert('gray',{grayscale:100});assert(!gray.red.some(Boolean));
+ console.log('PASS image strokes: web/mini/calendar parity, light black/red, transparency, single/carousel, exact preview and mono');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>delete global.wx);
