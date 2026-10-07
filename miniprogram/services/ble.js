@@ -135,7 +135,8 @@ async function findCharacteristic(targetServiceUUID, targetCharacteristicUUID) {
 
 async function negotiateMTU(id) {
   try {
-    await p(wx.setBLEMTU, { deviceId: id, mtu: cfg.preferredMTU });
+    // Keep the baseline ATT MTU during connection discovery; no optional renegotiation.
+    mtu = 23;
   } catch (error) {
     log.warn('BLE', 'MTU request skipped ' + errorText(error));
   }
