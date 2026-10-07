@@ -3,7 +3,7 @@ const core=require('../miniprogram/services/calendar-core');
 let stored={},device='A',fail=false,requests=0;
 const wx={getStorageSync:()=>stored,setStorageSync:(k,s)=>stored=s,request:o=>{requests++;fail?o.fail({errMsg:'timeout'}):o.success({statusCode:200,data:{current:{weather_code:0,temperature_2m:23,relative_humidity_2m:55}}});}};
 const moduleBox={exports:{}};
-vm.runInNewContext(fs.readFileSync(require.resolve('../miniprogram/services/calendar'),'utf8'),{module:moduleBox,wx,Date,Promise,Error,encodeURIComponent,require:n=>n==='./calendar-core'?core:{getDeviceId:()=>device}});
+vm.runInNewContext(fs.readFileSync(require.resolve('../miniprogram/services/calendar'),'utf8'),{module:moduleBox,wx,Date,Promise,Error,encodeURIComponent,require:n=>n==='./calendar-core'?core:n==='../utils/logger'?{warn(){}}:{getDeviceId:()=>device}});
 const service=moduleBox.exports;
 (async()=>{
  service.savePlace({name:'上海',latitude:31,longitude:121});
