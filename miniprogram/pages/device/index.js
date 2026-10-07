@@ -16,7 +16,7 @@ Page({
     deviceId: '',
     screenStatus: '',
     firmwareVersion: '',
-    idleDisconnectDraft: '1'
+    idleDisconnectDraft: '5'
   },
 
   onLoad() {
@@ -103,12 +103,12 @@ Page({
           screenStatus: labels[status.state] || '设备状态 ' + status.state,
           firmwareVersion: status.firmwareVersion || ''
         };
-        if (status.idleDisconnectMinutes != null && status.idleDisconnectMinutes > 0) {
+        if (status.idleDisconnectMinutes != null && status.idleDisconnectMinutes >= 0) {
           next.idleDisconnectDraft = String(status.idleDisconnectMinutes);
         }
         this.setData(next);
       });
-      if (initialStatus.idleDisconnectMinutes != null && initialStatus.idleDisconnectMinutes > 0) {
+      if (initialStatus.idleDisconnectMinutes != null && initialStatus.idleDisconnectMinutes >= 0) {
         this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
       }
       modeState.set(initialStatus.scene === 2 ? 'clock' : (initialStatus.scene === 0 ? 'image' : 'off'));

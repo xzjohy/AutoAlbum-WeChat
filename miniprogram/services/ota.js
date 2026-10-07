@@ -83,6 +83,23 @@ async function waitForChecksum(target, expected) {
   }
 }
 
+/* Query the firmware's effective ATT MTU. Missing reply from an older
+ * firmware safely falls back without attempting an oversized staging write. */
+async function packetBudget(target) {
+  let timer,remove;
+  const info = new Promise(resolve => {
+    timer=setTimeout(()=>resolve(19),1000);
+    remove=ble.onCharacteristicValue(target.characteristicId,buffer=>{
+      const b=new Uint8Array(buffer);
+      if(b.length===4&&b[0]===8&&b[1]===1)resolve(Math.max(19,Math.min(128,b[2])));
+    });
+  });
+  try {
+    await operation(ble.writeCharacteristic(target,new Uint8Array([8])));
+    return Math.min(await Promise.race([info,active.aborted]),ble.getRawWriteSize()-1,128);
+  } finally {clearTimeout(timer);if(remove)remove();}
+}
+
 async function update(buffer, onProgress) {
   if (running) throw new Error('固件升级正在进行');
   if (!ble.isConnected()) throw new Error('请先连接墨水屏');
@@ -110,18 +127,18 @@ async function update(buffer, onProgress) {
     });
     await operation(ble.enableNotifications(target));
     protocol.close();
+    const chunkSize=await packetBudget(target);
+    log.info('OTA', `packet data ${chunkSize} bytes`);
     log.info('OTA', `start ${firmware.length} bytes checksum ${expected.toString(16)}`);
 
     for (let address = BANK_START; address < BANK_START + BANK_SIZE; address += SECTOR_SIZE) {
       await operation(ble.writeCharacteristic(target, new Uint8Array([1, ...addressBytes(address)])));
-      await delay(60);
+      await delay(20);
       if(session.error)throw session.error;
       const erased = (address - BANK_START + SECTOR_SIZE) / BANK_SIZE;
       onProgress && onProgress({ progress: Math.round(erased * 10), stage: '正在擦除升级区' });
     }
 
-    const rawSize = ble.getRawWriteSize();
-    const chunkSize = Math.min(19, rawSize - 1); // default MTU 23: opcode + 19 bytes
     for (let pageOffset = 0; pageOffset < firmware.length; pageOffset += PAGE_SIZE) {
       const page = firmware.subarray(pageOffset, Math.min(pageOffset + PAGE_SIZE, firmware.length));
       for (let offset = 0; offset < page.length; offset += chunkSize) {
@@ -133,7 +150,7 @@ async function update(buffer, onProgress) {
       }
       const address = BANK_START + pageOffset;
       await operation(ble.writeCharacteristic(target, new Uint8Array([2, ...addressBytes(address)])));
-      await delay(50);
+      await delay(10);
       const written = Math.min(firmware.length, pageOffset + page.length);
       onProgress && onProgress({
         progress: 10 + Math.round(written / firmware.length * 80),
