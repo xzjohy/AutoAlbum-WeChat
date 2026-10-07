@@ -152,12 +152,13 @@ async function start(listener) {
     }, 12000);
     hello = { resolve, reject, timer };
   });
+  const handshake = hello;
   const query = () => {
-    if (!hello || queries >= 4) return;
+    if (hello !== handshake || queries >= 4) return;
     queries++;
     log.info('EPD', `请求设备状态 ${queries}/4`);
     ble.write(new Uint8Array([5])).catch(error => {
-      if (!hello) return;
+      if (hello !== handshake) return;
       log.warn('EPD', `状态查询写入失败：${error.errMsg || error.message || error}`);
       if (error.errCode === 10008) return; // Only retry this read-only query.
       clearState(error.errMsg || error.message || String(error));
@@ -169,7 +170,7 @@ async function start(listener) {
   try {
     status = await response;
   } catch (error) {
-    clearState(error.message || String(error));
+    if (hello === handshake) clearState(error.message || String(error));
     throw error;
   }
   pollTimer = setInterval(() => {
