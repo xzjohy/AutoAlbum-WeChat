@@ -4,6 +4,7 @@ const control = require('../../services/control');
 const modeState = require('../../services/mode');
 const protocol = require('../../services/protocol');
 const imageProcessor = require('../../services/image');
+const calendar = require('../../services/calendar');
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp', 'webp'];
 
@@ -113,6 +114,7 @@ Page({
   selectImageMode(event) {
     if (this.data.converting || this.data.syncing) return;
     const mode = event.currentTarget.dataset.mode;
+    if (mode === 'calendar') return wx.navigateTo({url:'/pages/calendar/index'});
 
     if (mode === 'api') return;
 
@@ -501,6 +503,7 @@ Page({
         imageDisplayDraft: true,
         imageModeDirty: false
       });
+      calendar.forget();
 
       wx.showToast({
         title: '同步完成'
@@ -534,6 +537,7 @@ Page({
     });
     try {
       await syncer.storeCarousel(this.data.images, minutes, state => this.report(state));
+      calendar.forget();
       this.setData({
         carouselRunning: true,
         carouselPaused: false,

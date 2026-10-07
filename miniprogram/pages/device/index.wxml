@@ -1,4 +1,5 @@
 <view class="page">
+  <view class="panel" wx:if="{{calendarNotice}}"><view class="panel-title">日历更新提示</view><view class="muted">{{calendarNotice}}</view><button class="tech-btn ghost" bindtap="openCalendar">查看日历更新</button></view>
   <view class="hero device-hero">
     <view class="eyebrow">BLE LINK</view>
     <view class="hero-title">设备连接</view>

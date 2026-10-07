@@ -46,7 +46,7 @@ function load(file, dependencies) {
 }
 const protocol = load('miniprogram/services/protocol.js', { './ble': ble, '../utils/logger': log });
 const control = load('miniprogram/services/control.js', {
-  './protocol': protocol, '../utils/logger': log, './mode': { set() {} }
+  './protocol': protocol, '../utils/logger': log, './mode': { set() {} }, './calendar': { forget() {} }
 });
 (async () => {
   try {

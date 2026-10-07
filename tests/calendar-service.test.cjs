@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const core=require('../miniprogram/services/calendar-core');
+let stored={},device='A',fail=false,requests=0;
+const wx={getStorageSync:()=>stored,setStorageSync:(k,s)=>stored=s,request:o=>{requests++;fail?o.fail({errMsg:'timeout'}):o.success({statusCode:200,data:{current:{weather_code:0,temperature_2m:23,relative_humidity_2m:55}}});}};
+const moduleBox={exports:{}};
+vm.runInNewContext(fs.readFileSync(require.resolve('../miniprogram/services/calendar'),'utf8'),{module:moduleBox,wx,Date,Promise,Error,encodeURIComponent,require:n=>n==='./calendar-core'?core:{getDeviceId:()=>device}});
+const service=moduleBox.exports;
+(async()=>{
+ service.savePlace({name:'上海',latitude:31,longitude:121});
+ const current=(await service.latest()).model;service.remember(current);
+ assert.equal(await service.check({scene:0,carouselPaused:true,carouselEnabled:true}), '');
+ service.remember({...current,temperature:22});
+ assert.match(await service.check({scene:0,carouselPaused:true}),/有更新/);
+ const before=requests;assert.equal(await service.check({scene:2}),'');assert.equal(requests,before);
+ assert.equal(await service.check({scene:0,carouselRunning:true}),'');assert.equal(requests,before);
+ device='B';assert.equal(await service.check({scene:0}),'');device='A';
+ fail=true;assert.match(await service.check({scene:0}),/检查失败/);
+ service.forget();assert.equal(await service.check({scene:0}),'');
+ console.log('PASS calendar: per-device records, paused carousel, unchanged data, clock/running guards and weather failure');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/device/index",
+    "pages/calendar/index",
     "pages/album/index",
     "pages/control/index",
     "pages/ota/index",

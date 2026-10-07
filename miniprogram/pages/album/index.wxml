@@ -8,6 +8,7 @@
   </view>
 
   <view class="mode-tabs">
+    <button class="mode-tab" disabled="{{syncing || converting}}" data-mode="calendar" bindtap="selectImageMode">日历模式</button>
     <button class="mode-tab {{imageMode === 'single' ? 'active' : ''}}" disabled="{{syncing || converting}}" data-mode="single" bindtap="selectImageMode">单张图片</button>
     <button class="mode-tab {{imageMode === 'carousel' ? 'active' : ''}}" disabled="{{syncing || converting}}" data-mode="carousel" bindtap="selectImageMode">文件夹轮播</button>
     <button class="mode-tab disabled-tab" disabled>API <text>待开放</text></button>

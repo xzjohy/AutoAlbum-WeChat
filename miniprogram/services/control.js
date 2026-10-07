@@ -1,6 +1,7 @@
 const protocol = require('./protocol');
 const log = require('../utils/logger');
 const mode = require('./mode');
+const calendar = require('./calendar');
 
 function ensureReady() {
   if (!protocol.isReady()) throw new Error('请先连接配套墨水屏');
@@ -96,6 +97,7 @@ async function applyClockDisplay(face, interval, batteryVisible, refreshMode, te
   if (dateText && timeText) bytes.push(...customTimeCommand(dateText, timeText).subarray(1));
   const status = await protocol.command(1, new Uint8Array(bytes));
   mode.set('clock');
+  calendar.forget();
   return status;
 }
 
@@ -125,6 +127,7 @@ async function clockMode(face = 'digital', interval = 5, dateText, timeText, bat
     await configureClock();
     const status = await protocol.command(1, time);
     mode.set('clock');
+  calendar.forget();
     log.info('CTRL', 'clock time synchronized');
     return status;
   }
@@ -133,6 +136,7 @@ async function clockMode(face = 'digital', interval = 5, dateText, timeText, bat
   await protocol.command(1, time);
   const status = await protocol.command(1, new Uint8Array([0xe1, 2]));
   mode.set('clock');
+  calendar.forget();
   log.info('CTRL', 'clock mode and time synchronized');
   return status;
 }
@@ -188,6 +192,7 @@ async function clear(fill) {
   await imageMode();
   await protocol.command(0, new Uint8Array([0, fill]));
   const status = await protocol.command(0, new Uint8Array([1, 1]));
+  calendar.forget();
   log.info('CTRL', fill ? 'clear white' : 'clear black');
   return status;
 }

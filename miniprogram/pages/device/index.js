@@ -2,6 +2,7 @@ const ble = require('../../services/ble');
 const protocol = require('../../services/protocol');
 const modeState = require('../../services/mode');
 const connectionPolicy = require('../../services/connection-policy');
+const calendar = require('../../services/calendar');
 
 function displayName(device) {
   return device.localName || device.name || '未命名设备';
@@ -16,13 +17,14 @@ Page({
     deviceId: '',
     screenStatus: '',
     firmwareVersion: '',
+    calendarNotice: '',
     idleDisconnectDraft: '5'
   },
 
   onLoad() {
     this.removeDisconnectListener = ble.onDisconnect(() => {
       modeState.set('off');
-      this.setData({ connected: false, deviceId: '', connecting: false, screenStatus: '连接已断开', firmwareVersion: '' });
+      this.setData({ connected: false, deviceId: '', connecting: false, screenStatus: '连接已断开', firmwareVersion: '', calendarNotice:'' });
     });
   },
 
@@ -35,6 +37,15 @@ Page({
       firmwareVersion: status && status.firmwareVersion || '',
       idleDisconnectDraft: String(idleMinutes)
     });
+    this.checkCalendar(status);
+  },
+
+  openCalendar() { wx.navigateTo({url:'/pages/calendar/index'}); },
+  async checkCalendar(status) {
+    if (!status || !ble.isConnected()) return this.setData({calendarNotice:''});
+    const id=ble.getDeviceId();
+    const notice=await calendar.check(status).catch(()=> '日历更新检查失败，可手动进入日历页重试');
+    if(id===ble.getDeviceId())this.setData({calendarNotice:notice});
   },
 
   inputIdleDisconnect(event) { this.setData({ idleDisconnectDraft: event.detail.value }); },
@@ -112,6 +123,7 @@ Page({
         this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
       }
       modeState.set(initialStatus.scene === 2 ? 'clock' : (initialStatus.scene === 0 ? 'image' : 'off'));
+      this.checkCalendar(initialStatus);
       const previousVersion = wx.getStorageSync('autoalbum_ota_previous_version');
       let screenStatus = '配套固件已确认，可以同步图片';
       if (previousVersion && initialStatus.firmwareVersion) {
