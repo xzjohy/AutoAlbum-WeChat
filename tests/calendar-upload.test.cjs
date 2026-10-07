@@ -8,6 +8,12 @@ assert.equal(planes.black[0]&128,0);assert(planes.red[0]&64);
 assert.equal(core.packPixels(pixels,400,300,true).red.some(x=>x!==0),false);
 assert.throws(()=>core.packPixels(pixels,800,600),/400/);
 assert([...planes.pixels].every(x=>x===0||x===255));
+// Thin glyph edges must survive; near-white background must remain white.
+const edges=new Uint8ClampedArray(400*300*4).fill(255);
+edges.set([170,170,170,255],0);edges.set([255,170,170,255],4);edges.set([235,235,235,255],8);
+const sharp=core.packPixels(edges);assert.equal(sharp.black[0]&128,0);assert(sharp.red[0]&64);
+assert(sharp.black[0]&32);assert.equal(sharp.red[0]&32,0);
+
 const source=fs.readFileSync(path.join(__dirname,'../miniprogram/services/sync.js'),'utf8');
 async function transfer(fail=false,native=true){
  const commands=[];let conversions=0;

@@ -36,9 +36,10 @@
     const black=new Uint8Array(15000),red=new Uint8Array(15000),pixels=new Uint8ClampedArray(rgba.length);black.fill(255);
     for(let n=0;n<width*height;n++) {
       const i=n*4,alpha=rgba[i+3]/255,r=rgba[i]*alpha+255*(1-alpha),g=rgba[i+1]*alpha+255*(1-alpha),b=rgba[i+2]*alpha+255*(1-alpha);
-      const blackDistance=r*r+g*g+b*b,whiteDistance=(255-r)**2+(255-g)**2+(255-b)**2,redDistance=(255-r)**2+g*g+b*b;
-      const isRed=!monochrome && redDistance<blackDistance && redDistance<whiteDistance;
-      const isBlack=!isRed && blackDistance<whiteDistance;
+      // Nearest-colour quantization discarded glyph pixels lighter than 128.
+      // Keep antialiased strokes with ~28% ink coverage without diffusing dots.
+      const isRed=!monochrome && r>100 && r-g>40 && r-b>40 && Math.max(g,b)<184;
+      const isBlack=!isRed && r*.299+g*.587+b*.114<184;
       const mask=128>>(n&7),offset=n>>3;
       if(isRed)red[offset]|=mask;else if(isBlack)black[offset]&=~mask;
       pixels[i]=isRed||!isBlack?255:0;pixels[i+1]=pixels[i+2]=isRed||isBlack?0:255;pixels[i+3]=255;
