@@ -5,7 +5,8 @@
     "pages/album/index",
     "pages/control/index",
     "pages/ota/index",
-    "pages/logs/index"
+    "pages/logs/index",
+    "pages/ebook/index"
   ],
   "window": {
     "navigationBarTitleText": "E-Paper Link",
@@ -22,9 +23,9 @@
     "list": [
       { "pagePath": "pages/device/index", "text": "设备" },
       { "pagePath": "pages/album/index", "text": "图片" },
-      { "pagePath": "pages/control/index", "text": "控制" },
-      { "pagePath": "pages/ota/index", "text": "升级" },
-      { "pagePath": "pages/logs/index", "text": "日志" }
+      { "pagePath": "pages/ebook/index", "text": "TXT" },
+      { "pagePath": "pages/control/index", "text": "时钟" },
+      { "pagePath": "pages/ota/index", "text": "升级" }
     ]
   }
 }

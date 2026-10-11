@@ -3,6 +3,7 @@ const protocol = require('../../services/protocol');
 const modeState = require('../../services/mode');
 const connectionPolicy = require('../../services/connection-policy');
 const calendar = require('../../services/calendar');
+const firmware = require('../../services/firmware');
 
 function displayName(device) {
   return device.localName || device.name || '未命名设备';
@@ -17,12 +18,16 @@ Page({
     deviceId: '',
     screenStatus: '',
     firmwareVersion: '',
+    ebookEnabled: false,
+    ebookNotice: '请先连接设备，读取固件版本后开放电子书',
     calendarNotice: '',
     idleDisconnectDraft: '5'
   },
 
   onLoad() {
+    this.removeEbookStatus = protocol.onStatus(status => this.updateEbookAccess(status));
     this.removeDisconnectListener = ble.onDisconnect(() => {
+      this.updateEbookAccess(null);
       modeState.set('off');
       this.setData({ connected: false, deviceId: '', connecting: false, screenStatus: '连接已断开', firmwareVersion: '', calendarNotice:'' });
     });
@@ -30,6 +35,7 @@ Page({
 
   onShow() {
     const status = protocol.getStatus();
+    this.updateEbookAccess(status);
     const idleMinutes = connectionPolicy.get();
     this.setData({
       connected: ble.isConnected(),
@@ -40,9 +46,20 @@ Page({
     this.checkCalendar(status);
   },
 
-  openCalendar() { wx.navigateTo({url:'/pages/calendar/index'}); },
+  updateEbookAccess(status) {
+    const connected = ble.isConnected();
+    this.setData({ebookEnabled: connected && firmware.isEbook(status), ebookNotice: firmware.ebookHint(connected, status)});
+  },
+  openEbook() {
+    const status = protocol.getStatus();
+    this.updateEbookAccess(status);
+    if (!ble.isConnected() || !protocol.isReady() || !firmware.isEbook(status)) return;
+    wx.switchTab({url:'/pages/ebook/index'});
+  },
+  openLogs() { wx.navigateTo({url:'/pages/logs/index'}); },
+  openCalendar() { if (!firmware.isEbook(protocol.getStatus())) wx.navigateTo({url:'/pages/calendar/index'}); },
   async checkCalendar(status) {
-    if (!status || !ble.isConnected()) return this.setData({calendarNotice:''});
+    if (!status || !ble.isConnected() || firmware.isEbook(status)) return this.setData({calendarNotice:''});
     const id=ble.getDeviceId();
     const notice=await calendar.check(status).catch(()=> '日历更新检查失败，可手动进入日历页重试');
     if(id===ble.getDeviceId())this.setData({calendarNotice:notice});
@@ -76,6 +93,7 @@ Page({
   },
 
   onUnload() {
+    if (this.removeEbookStatus) this.removeEbookStatus();
     if (this.removeDisconnectListener) this.removeDisconnectListener();
     // Page destruction must not tear down the app-wide BLE session.
     protocol.setStatusListener(null);
@@ -122,10 +140,10 @@ Page({
       if (initialStatus.idleDisconnectMinutes != null && initialStatus.idleDisconnectMinutes >= 0) {
         this.setData({ idleDisconnectDraft: String(initialStatus.idleDisconnectMinutes) });
       }
-      modeState.set(initialStatus.scene === 2 ? 'clock' : (initialStatus.scene === 0 ? 'image' : 'off'));
+      modeState.set(firmware.isEbook(initialStatus) ? 'off' : (initialStatus.scene === 2 ? 'clock' : (initialStatus.scene === 0 ? 'image' : 'off')));
       this.checkCalendar(initialStatus);
       const previousVersion = wx.getStorageSync('autoalbum_ota_previous_version');
-      let screenStatus = '配套固件已确认，可以同步图片';
+      let screenStatus = firmware.isEbook(initialStatus) ? '已识别 3.X.X 电子书固件，请进入电子书页面' : '配套固件已确认，可以同步图片';
       if (previousVersion && initialStatus.firmwareVersion) {
         screenStatus = previousVersion === initialStatus.firmwareVersion
           ? `设备仍运行 ${previousVersion}；OTA 后请等待重启并重新烧录确认`

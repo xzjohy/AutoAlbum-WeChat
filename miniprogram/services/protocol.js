@@ -212,6 +212,10 @@ function command(channel, value) {
 }
 
 function sendCommand(channel, body) {
+  if (lastStatus && /^3\.\d+\.\d+$/.test(lastStatus.firmwareVersion || '') &&
+      (channel === 0 || [0xb1,0xdd,0xe0,0xe1,0xe2,0xe3,0xe6,0xe7,0xfa].includes(body[0]))) {
+    return Promise.reject(new Error('3.X.X 为电子书固件，请使用电子书页面；图片、日历和时钟指令不可用'));
+  }
   if (pending || busy) return Promise.reject(new Error('墨水屏仍在处理上一条指令'));
   const token = sequence;
   sequence = token % 65535 + 1;

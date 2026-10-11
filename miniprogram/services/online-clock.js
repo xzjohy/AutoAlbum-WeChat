@@ -2,6 +2,7 @@ const ble = require('./ble');
 const protocol = require('./protocol');
 const control = require('./control');
 const log = require('../utils/logger');
+const firmware = require('./firmware');
 
 const KEY = 'autoalbum_online_clock';
 let timer = null;
@@ -18,6 +19,7 @@ function settings() {
 
 async function tick() {
   if (synchronizing || !ble.isConnected() || !protocol.isReady() || protocol.isBusy()) return;
+  if (firmware.isEbook(protocol.getStatus())) return;
   synchronizing = true;
   try {
     await control.syncTime();

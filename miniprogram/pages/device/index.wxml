@@ -31,4 +31,5 @@
       <view class="rssi">{{item.RSSI}}<text>dBm</text></view>
     </view>
   </view>
+  <view class="panel"><view class="panel-title">运行日志</view><view class="muted">查看蓝牙、电子书和升级记录。</view><button class="tech-btn ghost" bindtap="openLogs">查看日志</button></view>
 </view>

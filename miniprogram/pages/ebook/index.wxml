@@ -1,0 +1,43 @@
+<view class="page">
+  <view class="eyebrow">E-INK READER · 400 × 300</view>
+  <view class="title">墨水书房</view><view class="subtitle">把文字留在纸感屏幕上。</view>
+  <view class="card"><view class="heading">01 / 设备与固件</view><text>{{connection}}</text>
+    <view class="muted">当前固件 {{firmwareVersion || '未识别'}} · 电子书功能仅开放给 3.X.X 系列。</view>
+    <button bindtap="openDevice" disabled="{{busy}}">返回设备页</button>
+    <view wx:if="{{devicePage}}" class="muted">设备阅读进度 {{devicePage}} / {{deviceTotal}} · 已存 {{devicePages}} 页</view>
+  </view>
+  <block wx:if="{{connected}}">
+  <view class="card"><view class="heading">02 / 导入 TXT</view>
+    <picker range="{{encodings}}" value="{{encodingIndex}}" bindchange="encodingChange" disabled="{{busy}}"><view class="field">文本编码：{{encodings[encodingIndex]}}</view></picker>
+    <button bindtap="choose" disabled="{{busy}}">从微信聊天选择 TXT</button>
+    <view class="filename">{{filename || '尚未选择文件'}}</view>
+    <view class="row"><picker range="{{fonts}}" value="{{fontIndex}}" bindchange="fontChange" disabled="{{busy}}"><view class="field">字号 {{fonts[fontIndex]}} px</view></picker>
+    <picker range="{{families}}" value="{{familyIndex}}" bindchange="familyChange" disabled="{{busy}}"><view class="field">{{families[familyIndex]}}</view></picker></view>
+    <view class="muted">{{pageCount}} 页 · {{characters}} 字符；中英文混排，随书携带字体。</view>
+  </view>
+  <view class="card" wx:if="{{pageCount}}"><view class="heading">03 / 拆分与上传</view>
+    <view class="row"><input type="number" value="{{start}}" data-key="start" bindinput="rangeChange" disabled="{{busy}}" placeholder="起始页"/><text>至</text><input type="number" value="{{end}}" data-key="end" bindinput="rangeChange" disabled="{{busy}}" placeholder="结束页"/></view>
+    <view class="muted">{{size}} / {{capacity}} 字节（包括正文、索引和字库）</view><view class="error" wx:if="{{oversize}}">超出设备容量，请减少页数。</view>
+    <button bindtap="fit" disabled="{{busy}}">从起始页选取最大可上传范围</button>
+    <button bindtap="preview" disabled="{{busy}}">预览起始页</button>
+    <canvas type="2d" id="preview" class="preview"></canvas>
+    <button bindtap="exportPart" disabled="{{busy || oversize}}">保存所选范围为 TXT 子文件</button>
+    <button type="primary" bindtap="upload" disabled="{{busy || oversize || !connected}}">生成字库并上传所选页面</button>
+  </view>
+  <view class="card"><view class="heading">04 / 阅读控制</view>
+    <view class="row"><button data-event="2" bindtap="gesture" disabled="{{busy || !connected}}">上一页</button><button data-event="1" bindtap="gesture" disabled="{{busy || !connected}}">下一页</button><button data-event="3" bindtap="gesture" disabled="{{busy || !connected}}">显示进度</button></view>
+    <view class="row"><input type="number" value="{{jump}}" bindinput="jumpChange" placeholder="原书页码" disabled="{{busy}}"/><button bindtap="jumpTo" disabled="{{busy || !connected}}">跳转</button></view>
+    <button bindtap="refreshDiagnostic" disabled="{{busy || !connected}}">查询刷新状态</button>
+    <button bindtap="retryPage" disabled="{{busy || !connected}}">重试当前页</button>
+    <view class="muted">遮挡一次下一页，快速两次上一页，遮挡 3 秒显示进度。</view>
+    <view class="field">LED 光敏实验</view><view class="muted">先保持无遮挡校准，再遮挡验证。接线不同可能无光敏响应；首次不自动启用。</view>
+    <picker range="{{leds}}" value="{{ledIndex}}" bindchange="ledChange" disabled="{{busy}}"><view class="field">{{leds[ledIndex]}}</view></picker>
+    <button bindtap="calibrate" disabled="{{busy || !connected}}">无遮挡校准（约 2 秒）</button>
+    <button bindtap="sensor" disabled="{{busy || !connected}}">读取光敏状态</button>
+    <button bindtap="disableSensor" disabled="{{busy || !connected}}">关闭光敏输入</button><view class="muted">{{sensorText}}</view>
+  </view>
+  <view class="card"><view class="heading">设备维护</view><button bindtap="nfcStatus" disabled="{{busy || !connected}}">查询 NFC 状态</button><button bindtap="ota" disabled="{{busy || !connected}}">选择固件并 OTA 升级</button></view>
+  </block>
+  <view class="status">{{status}}</view><progress wx:if="{{busy}}" percent="{{percent}}" activeColor="#385b48"/>
+  <canvas type="2d" id="glyph" class="glyph"></canvas>
+</view>
